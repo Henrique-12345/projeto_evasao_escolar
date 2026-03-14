@@ -32,10 +32,11 @@ data/processed/*
 !data/processed/.gitkeep
 
 # ── Imagens geradas pelo notebook ────────────────────────────────────────────
-*.png
-*.jpg
-*.jpeg
-*.svg
+# Ignora PNGs/JPGs soltos na raiz; a pasta imagens/ é versionada
+/*.png
+/*.jpg
+/*.jpeg
+/*.svg
 
 # ── Streamlit ────────────────────────────────────────────────────────────────
 .streamlit/

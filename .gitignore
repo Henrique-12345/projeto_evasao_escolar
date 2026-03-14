@@ -1,0 +1,57 @@
+# ── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+
+# ── Ambientes virtuais ───────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.env
+
+# ── Jupyter ──────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+# Notebook executado (gerado automaticamente — não versionar)
+*_executado.ipynb
+
+# ── Banco de dados ───────────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Dados processados (gerados pelo ETL — não versionar) ─────────────────────
+data/processed/*
+!data/processed/.gitkeep
+
+# ── Imagens geradas pelo notebook ────────────────────────────────────────────
+*.png
+*.jpg
+*.jpeg
+*.svg
+
+# ── Streamlit ────────────────────────────────────────────────────────────────
+.streamlit/
+
+# ── IDEs ─────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.code-workspace
+.cursor/
+
+# ── Sistema operacional ──────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Logs e temporários ───────────────────────────────────────────────────────
+*.log
+*.tmp
+*.bak

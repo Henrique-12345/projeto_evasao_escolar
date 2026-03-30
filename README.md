@@ -125,20 +125,28 @@ O pipeline em `etl/etl_pipeline.py` executa três etapas:
 
 ## Dashboard
 
-O dashboard interativo possui **6 páginas**:
+O dashboard interativo é organizado em **5 páginas com estrutura de storytelling**, focadas em tomada de decisão:
 
-| Página | Conteúdo |
-|---|---|
-| 📋 Visão Geral | KPIs principais, séries temporais, tabela resumo |
-| 🔄 Fluxo Escolar | Promoção × Repetência, composição de resultados empilhada |
-| ⚠️ Distorção e Risco | TDI, Índice de Risco composto, escolas em nível crítico |
-| 🔗 Correlações | Matriz de correlação, top fatores associados à evasão no EM |
-| 🏗️ Infraestrutura | Alunos por turma (ATU), horas-aula (HAD), superlotação × abandono |
-| 📅 Tendências | Variação ano a ano, boxplot por período histórico, radar de risco |
+| Página | Propósito | Conteúdo Principal |
+|---|---|---|
+| 🏠 Painel de Alertas | **Visão geral executiva** | KPIs, alertas automáticos, gauge de score de risco, tendência histórica do score |
+| 📍 Onde Está o Problema | **Identificação dos casos críticos** | Ranking por score, mapa de calor nível×ano, distribuição em pizza por nível de risco |
+| 🔍 Por Que Ocorre | **Análise causal** | Cadeia causal, scatter repetência×evasão, TDI×abandono, diagnóstico por fatores, matriz de correlação |
+| ✅ O Que Fazer | **Recomendações priorizadas** | 8 ações ordenadas por urgência (Imediata / Curto / Médio / Longo prazo) com gatilho nos dados |
+| 📈 Evolução Temporal | **Análise histórica** | Série temporal completa, variação ano a ano, EF vs EM, boxplot por período histórico |
+
+**Funcionalidades do dashboard:**
+- **Score de Risco 0–100** por registro e por ano (cor: 🟢 Baixo · 🟡 Moderado · 🔴 Alto · 🚨 Crítico)
+- **Alertas automáticos** gerados a partir de thresholds nos indicadores
+- **Gauge visual** do score de risco com faixas coloridas
+- **Ranking filtrável** por nível de risco com barra de progresso
+- **Seção "Por que está em risco?"** com diagnóstico fator a fator
+- **Textos explicativos** em cada gráfico e blocos de insight analítico
 
 **Filtros disponíveis na sidebar:**
-- Intervalo de anos
+- Período de análise (slider de anos)
 - Nível de ensino (EF / EM)
+- Nível de risco para filtragem do ranking
 
 ---
 

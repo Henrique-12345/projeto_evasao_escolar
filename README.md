@@ -125,28 +125,43 @@ O pipeline em `etl/etl_pipeline.py` executa três etapas:
 
 ## Dashboard
 
-O dashboard interativo é organizado em **5 páginas com estrutura de storytelling**, focadas em tomada de decisão:
+O dashboard interativo é organizado em **5 páginas orientadas à tomada de decisão**, sem jargão excessivo, projetadas para usuários técnicos e não técnicos.
 
 | Página | Propósito | Conteúdo Principal |
 |---|---|---|
-| 🏠 Painel de Alertas | **Visão geral executiva** | KPIs, alertas automáticos, gauge de score de risco, tendência histórica do score |
-| 📍 Onde Está o Problema | **Identificação dos casos críticos** | Ranking por score, mapa de calor nível×ano, distribuição em pizza por nível de risco |
-| 🔍 Por Que Ocorre | **Análise causal** | Cadeia causal, scatter repetência×evasão, TDI×abandono, diagnóstico por fatores, matriz de correlação |
-| ✅ O Que Fazer | **Recomendações priorizadas** | 8 ações ordenadas por urgência (Imediata / Curto / Médio / Longo prazo) com gatilho nos dados |
-| 📈 Evolução Temporal | **Análise histórica** | Série temporal completa, variação ano a ano, EF vs EM, boxplot por período histórico |
+| Painel de Indicadores | Visão geral executiva | KPIs com variação em p.p., alertas automáticos, gauge do score de risco, evolução histórica |
+| Onde está o risco? | Identificação dos casos críticos | Distribuição por nível de risco, ranking com barra de progresso, mapa de calor ano × risco |
+| Por que ocorre? | Análise causal | Cadeia causal explicada, correlações reprovação × evasão e TDI × abandono, diagnóstico por indicador, matriz de correlação interativa |
+| O que fazer? | Recomendações priorizadas | 8 ações ordenadas por urgência (Imediata / Curto / Médio / Longo prazo) com justificativa nos dados |
+| Como a evasão evoluiu? | Análise histórica | Série temporal completa, variação ano a ano, comparação EF × EM, boxplots por período histórico |
 
-**Funcionalidades do dashboard:**
-- **Score de Risco 0–100** por registro e por ano (cor: 🟢 Baixo · 🟡 Moderado · 🔴 Alto · 🚨 Crítico)
-- **Alertas automáticos** gerados a partir de thresholds nos indicadores
-- **Gauge visual** do score de risco com faixas coloridas
-- **Ranking filtrável** por nível de risco com barra de progresso
-- **Seção "Por que está em risco?"** com diagnóstico fator a fator
-- **Textos explicativos** em cada gráfico e blocos de insight analítico
+**Funcionalidades:**
+- **Score de Risco 0–100** por registro e por ano — calculado como: Abandono EM (40%) + TDI (30%) + Reprovação EM (30%)
+- **Níveis de risco**: Baixo (0–20) | Moderado (20–35) | Alto (35–50) | Critico (acima de 50)
+- **Alertas automáticos** com contexto e interpretação, gerados a partir de limiares nos indicadores
+- **Textos interpretativos** em cada gráfico, respondendo o que o dado mostra e por que é relevante
+- **Glossário completo** na barra lateral com definições de TDI, p.p., abandono, evasão, ATU, HAD etc.
+- **Notas de qualidade dos dados** indicando limitações e cuidados na interpretação
+- **Anotações de contexto histórico** (pandemia de COVID-19 destacada nos gráficos)
+- **Janela temporal padrão de 4 anos** (últimos 4 anos disponíveis), ajustável via filtro
 
-**Filtros disponíveis na sidebar:**
-- Período de análise (slider de anos)
+**Filtros disponíveis na barra lateral:**
+- Período de análise (slider de anos — padrão: últimos 4 anos)
 - Nível de ensino (EF / EM)
 - Nível de risco para filtragem do ranking
+
+**Glossário de termos técnicos** (disponível na barra lateral do dashboard):
+
+| Termo | Definição |
+|---|---|
+| TDI | Taxa de Distorção Idade-Série: % de alunos com mais de 2 anos de atraso escolar |
+| p.p. | Ponto percentual: diferença absoluta entre duas taxas (ex.: de 10% para 12% = +2 p.p.) |
+| Abandono | Saída do aluno durante o ano letivo em curso |
+| Evasão | Saída definitiva do sistema de ensino |
+| ATU | Média de Alunos por Turma |
+| HAD | Horas-Aula Diárias |
+| EF | Ensino Fundamental (1º ao 9º ano) |
+| EM | Ensino Médio (1º ao 3º ano) |
 
 ---
 

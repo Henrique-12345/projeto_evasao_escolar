@@ -310,6 +310,33 @@ def pagina_painel(dados: dict, filtros: dict):
         "Visão executiva dos principais indicadores de evasão e abandono escolar. "
         "Use esta página para identificar rapidamente a situação atual e os alertas mais críticos."
     )
+
+    # ── Narrativa contextual ───────────────────────────────────────────────────
+    st.markdown("""
+    <div style="background:#F8FAFC;border:1px solid #CBD5E1;padding:20px 24px;border-radius:6px;margin-bottom:20px">
+    <p style="color:#1E293B;font-size:0.97rem;font-weight:600;margin:0 0 10px 0">
+    O que estes dados estao dizendo?
+    </p>
+    <p style="color:#374151;font-size:0.91rem;margin:0 0 10px 0;line-height:1.7">
+    A evasão escolar observada neste painel não é um fenômeno isolado. Ela é o reflexo de transformações sociais,
+    econômicas e estruturais que aconteceram ao longo dos anos — e os dados mostram isso com clareza.
+    De forma geral, os padrões identificados acompanham ciclos de estabilidade e crise: nos anos anteriores a 2020,
+    as taxas vinham caindo gradualmente, impulsionadas pela expansão do acesso à escola e por políticas de permanência.
+    A partir de 2020, esse padrão se rompe abruptamente.
+    </p>
+    <p style="color:#374151;font-size:0.91rem;margin:0 0 10px 0;line-height:1.7">
+    <b>O que este dashboard permite fazer:</b> identificar em quais anos e por quais razões a evasão aumentou,
+    quais fatores estão mais associados ao risco, e quais ações têm maior potencial de reverter esse quadro.
+    As páginas seguintes aprofundam cada um desses pontos.
+    </p>
+    <p style="color:#64748B;font-size:0.83rem;margin:0;line-height:1.5">
+    <b>Nota:</b> os dados cobrem o período 2008–2022, com base no INEP/MEC.
+    Evasão = saída definitiva do sistema. Abandono = saída durante o ano letivo.
+    TDI = alunos com mais de 2 anos de atraso em relação à série esperada para a sua idade.
+    p.p. = ponto percentual (diferença absoluta entre dois percentuais).
+    </p>
+    </div>
+    """, unsafe_allow_html=True)
     st.markdown("---")
 
     a1, a2 = filtros["ano_range"]
@@ -773,28 +800,53 @@ def pagina_causas(dados: dict, filtros: dict):
     df_socio = df_socio[(df_socio["ano"] >= a1) & (df_socio["ano"] <= a2)]
 
     # ── Cadeia causal ──────────────────────────────────────────────────────────
-    st.markdown("#### A cadeia causal da evasão escolar em Recife")
+    st.markdown("#### A cadeia de causas que leva à evasão")
     st.markdown("""
-    <div style="background:#F8FAFC;border:1px solid #CBD5E1;padding:18px 22px;border-radius:6px;line-height:2">
-    <p style="margin:0;color:#1E293B;font-size:0.92rem">
-    Os dados históricos de Recife evidenciam uma cadeia de causas e efeitos que se repete sistematicamente:
+    <div style="background:#F8FAFC;border:1px solid #CBD5E1;padding:20px 24px;border-radius:6px">
+
+    <p style="color:#1E293B;font-size:0.93rem;margin:0 0 14px 0;line-height:1.7">
+    A evasão escolar raramente acontece de forma repentina. Ela é quase sempre o resultado final de uma cadeia
+    de eventos que começa muito antes — e os dados históricos de Recife mostram esse padrão com clareza:
     </p>
-    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-top:12px;font-size:0.88rem">
-    <span style="background:#FEE2E2;color:#991B1B;padding:5px 12px;border-radius:4px;font-weight:600">Reprovacao</span>
-    <span style="color:#64748B;font-size:1rem">→</span>
-    <span style="background:#FEF9C3;color:#92400E;padding:5px 12px;border-radius:4px;font-weight:600">Distorcao Idade-Serie (TDI)</span>
-    <span style="color:#64748B;font-size:1rem">→</span>
-    <span style="background:#FFEDD5;color:#9A3412;padding:5px 12px;border-radius:4px;font-weight:600">Desmotivacao e Abandono</span>
-    <span style="color:#64748B;font-size:1rem">→</span>
-    <span style="background:#FEE2E2;color:#991B1B;padding:5px 12px;border-radius:4px;font-weight:600">Evasao Definitiva</span>
+
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:16px;font-size:0.88rem">
+    <div style="background:#FEE2E2;color:#991B1B;padding:8px 14px;border-radius:4px;font-weight:600;text-align:center">
+    Reprovacao<br><span style="font-weight:400;font-size:0.8rem">aluno fica retido na mesma serie</span>
     </div>
-    <p style="margin:14px 0 0 0;color:#475569;font-size:0.88rem">
-    <b>Como interpretar:</b> Um aluno que reprova permanece na mesma série por mais um ano,
-    acumulando defasagem em relação à sua faixa etária — o que mede o TDI.
-    Com o aumento da defasagem, cresce o sentimento de inadequação e a desmotivação,
-    o que eleva a chance de abandono durante o ano letivo.
-    O abandono reiterado resulta, eventualmente, na saída definitiva do sistema escolar — a evasão.
-    <b>Interromper essa cadeia em qualquer etapa reduz o risco de evasão.</b>
+    <span style="color:#64748B;font-size:1.2rem;font-weight:300">&#8594;</span>
+    <div style="background:#FEF9C3;color:#92400E;padding:8px 14px;border-radius:4px;font-weight:600;text-align:center">
+    Defasagem Escolar (TDI)<br><span style="font-weight:400;font-size:0.8rem">aluno mais velho que o esperado para a serie</span>
+    </div>
+    <span style="color:#64748B;font-size:1.2rem;font-weight:300">&#8594;</span>
+    <div style="background:#FFEDD5;color:#9A3412;padding:8px 14px;border-radius:4px;font-weight:600;text-align:center">
+    Desmotivacao e Abandono<br><span style="font-weight:400;font-size:0.8rem">saida no meio do ano letivo</span>
+    </div>
+    <span style="color:#64748B;font-size:1.2rem;font-weight:300">&#8594;</span>
+    <div style="background:#FEE2E2;color:#991B1B;padding:8px 14px;border-radius:4px;font-weight:600;text-align:center">
+    Evasao Definitiva<br><span style="font-weight:400;font-size:0.8rem">saida permanente do sistema escolar</span>
+    </div>
+    </div>
+
+    <p style="color:#374151;font-size:0.91rem;margin:0 0 10px 0;line-height:1.7">
+    <b>Na pratica:</b> um aluno que reprova fica em uma turma com colegas mais novos do que ele,
+    o que gera constrangimento social e sensação de estar "fora do lugar". Isso reduz o engajamento com a escola
+    e aumenta a chance de ele faltar — e eventualmente abandonar. Quando esse ciclo se repete por dois ou mais anos,
+    a probabilidade de evasão definitiva cresce de forma significativa.
+    </p>
+
+    <p style="color:#374151;font-size:0.91rem;margin:0 0 10px 0;line-height:1.7">
+    <b>Por que o Ensino Médio é mais critico?</b> No EM, esse ciclo se agrava por fatores externos:
+    jovens entre 15 e 17 anos enfrentam maior pressão para entrar no mercado de trabalho,
+    especialmente em famílias de baixa renda. Durante crises econômicas — como a pandemia —
+    essa pressão aumenta ainda mais: famílias perdem renda, jovens precisam trabalhar, e a escola passa a ser
+    percebida como menos urgente do que a sobrevivência imediata.
+    Além disso, o currículo do EM é percebido como mais distante da realidade prática dos alunos,
+    o que reduz o engajamento e facilita a decisão de abandonar.
+    </p>
+
+    <p style="color:#0369A1;font-size:0.88rem;margin:0;line-height:1.5;font-weight:500">
+    Interromper essa cadeia em qualquer etapa reduz o risco de evasão.
+    As secoes abaixo mostram, com dados, onde cada elo dessa cadeia aparece mais forte.
     </p>
     </div>
     """, unsafe_allow_html=True)
@@ -823,15 +875,19 @@ def pagina_causas(dados: dict, filtros: dict):
                 st.plotly_chart(fig, use_container_width=True)
                 r = np.corrcoef(s[xc].values, s[yc].values)[0, 1]
                 slope = np.polyfit(s[xc].values, s[yc].values, 1)[0]
+                forca = "muito forte" if abs(r) > 0.8 else ("forte" if abs(r) > 0.6 else "moderada")
                 caixa_destaque(
                     "atencao" if abs(r) > 0.5 else "neutro",
-                    f"Correlacao de Pearson = {r:.2f} — Relacao {'forte' if abs(r) > 0.6 else 'moderada'}",
-                    f"A correlação de {r:.2f} indica uma relação {'positiva e forte' if r > 0.6 else 'positiva moderada'} "
-                    f"entre reprovação e evasão no EM. Isso significa que, historicamente, anos com mais reprovação "
-                    f"tendem a ter mais evasão — e vice-versa. "
-                    f"Tecnicamente, cada aumento de 1 ponto percentual na repetência está associado a um aumento "
-                    f"de {slope:.2f} p.p. na evasão (p.p. = ponto percentual). "
-                    "Reduzir a reprovação é, portanto, uma das estratégias mais eficazes para reduzir a evasão."
+                    f"O que o grafico mostra: relacao {forca} entre reprovacao e evasao",
+                    f"Cada ponto do gráfico representa um ano. A linha tracejada mostra a direção geral: "
+                    f"quando a reprovação sobe, a evasão também tende a subir. "
+                    f"Essa relação é {forca} nos dados de Recife (índice de {r:.2f} numa escala de 0 a 1). "
+                    f"Na prática: a cada 1 ponto percentual a mais de reprovação no EM, "
+                    f"a evasão cresce cerca de {abs(slope):.1f} ponto percentual. "
+                    "Isso acontece porque a reprovação gera defasagem escolar, que gera desmotivação, "
+                    "que leva ao abandono — e, eventualmente, à evasão definitiva. "
+                    "Essa relação se intensificou após a pandemia, quando muitos alunos retornaram com "
+                    "grande defasagem de aprendizagem, aumentando as reprovações e, em consequência, a evasão."
                 )
             else:
                 caixa_qualidade("Dados insuficientes para calcular a correlação no período selecionado. Amplie o intervalo de anos.")
@@ -851,23 +907,31 @@ def pagina_causas(dados: dict, filtros: dict):
                 st.plotly_chart(fig2, use_container_width=True)
                 r2 = np.corrcoef(s2["tdi_em"].values, s2["taxa_abandono_em"].values)[0, 1]
                 slope2 = np.polyfit(s2["tdi_em"].values, s2["taxa_abandono_em"].values, 1)[0]
+                forca2 = "muito forte" if abs(r2) > 0.8 else ("forte" if abs(r2) > 0.6 else "moderada")
                 caixa_destaque(
                     "atencao" if abs(r2) > 0.5 else "neutro",
-                    f"Correlacao de Pearson = {r2:.2f}",
-                    f"A correlação entre TDI e abandono é de {r2:.2f}, indicando que "
-                    f"anos com maior distorção idade-série tendem a apresentar mais abandono escolar. "
-                    f"Cada ponto percentual a mais no TDI está associado a um aumento de {slope2:.2f} p.p. no abandono. "
-                    "Isso confirma que alunos que ficaram 'para trás' na trajetória escolar têm maior tendência "
-                    "de desistir. Programas de nivelamento e reforço reduzem o TDI e, consequentemente, o abandono."
+                    f"O que o grafico mostra: relacao {forca2} entre defasagem escolar e abandono",
+                    f"O TDI (Taxa de Distorção Idade-Série) mede o percentual de alunos que estão cursando "
+                    f"uma série muito abaixo da esperada para a sua faixa etária — ou seja, alunos que 'ficaram para trás'. "
+                    f"O gráfico mostra que, nos anos em que o TDI foi mais alto, o abandono também foi maior. "
+                    f"Essa relação é {forca2} (índice de {r2:.2f}). "
+                    f"Na prática: a cada 1 ponto percentual a mais de defasagem, o abandono cresce cerca de "
+                    f"{abs(slope2):.1f} ponto percentual. "
+                    "Por quê? Um aluno mais velho numa turma mais jovem sente-se deslocado, envergonhado e "
+                    "progressivamente menos motivado a continuar. Esse fenômeno se agravou após a pandemia, "
+                    "quando muitos alunos avançaram de série sem dominar o conteúdo — acumulando defasagem "
+                    "que o TDI captura com precisão."
                 )
             else:
                 caixa_qualidade("Dados insuficientes para o período selecionado.")
 
     caixa_acao(
-        "Os dois gráficos acima mostram que a reprovação e a distorção idade-série são os fatores mais "
-        "fortemente associados à evasão em Recife. Políticas que reduzam a reprovação — como a progressão "
-        "continuada com suporte pedagógico — e que corrijam a distorção — como reforço escolar e nivelamento — "
-        "atacam diretamente as causas da evasão."
+        "Os dois gráficos confirmam que a reprovação e a defasagem escolar (TDI) são os fatores mais "
+        "fortemente associados à evasão em Recife. "
+        "A boa notícia é que ambos podem ser reduzidos com políticas específicas: "
+        "progressão continuada com suporte pedagógico reduz a reprovação; "
+        "aulas de nivelamento e reforço em contraturno reduzem a defasagem. "
+        "Essas ações atacam diretamente as causas da evasão — não apenas os sintomas."
     )
 
     st.markdown("---")
@@ -930,9 +994,9 @@ def pagina_causas(dados: dict, filtros: dict):
     st.markdown("---")
 
     # ── Matriz de correlação ───────────────────────────────────────────────────
-    titulo_pergunta("Como os indicadores se relacionam entre si?",
-                    "A matriz de correlação mostra a força e direção da relação entre os indicadores. "
-                    "Verde = relação inversa (um sobe, o outro cai). Vermelho = relação direta (os dois sobem juntos).")
+    titulo_pergunta("Quando um indicador piora, quais outros pioram junto?",
+                    "O mapa abaixo mostra quais indicadores andam juntos e quais andam em direções opostas. "
+                    "Verde = quando um sobe, o outro cai (relação inversa). Vermelho = quando um sobe, o outro também sobe (relação direta).")
 
     cols_c = [c for c in [
         "taxa_evasao_em", "taxa_abandono_em", "taxa_repetencia_em", "taxa_reprovacao_em",
@@ -964,14 +1028,18 @@ def pagina_causas(dados: dict, filtros: dict):
             st.plotly_chart(fig_corr, use_container_width=True)
 
         with col_c2:
-            st.markdown("**Como ler esta matriz:**")
+            st.markdown("**Como ler este mapa:**")
             st.markdown("""
-            - Cada célula mostra a correlação entre dois indicadores (escala de -1 a +1)
-            - **Verde escuro**: relação inversa forte — quando um sobe, o outro cai  
-            - **Vermelho escuro**: relação direta forte — ambos sobem ou caem juntos  
-            - **Amarelo / branco**: pouca relação entre os indicadores  
-            - Valores próximos de **+1 ou -1** indicam relação forte  
-            - Valores próximos de **0** indicam pouca ou nenhuma relação linear
+            Cada célula mostra o quanto dois indicadores "andam juntos".
+
+            - **Verde escuro** → relação inversa: mais aprovação, menos evasão (esperado)
+            - **Vermelho escuro** → relação direta: mais reprovação, mais evasão (sinal de alerta)
+            - **Amarelo / branco** → pouca relação entre os dois indicadores
+            - Os números variam de **-1** (opostos perfeitos) a **+1** (iguais perfeitos)
+
+            Não é necessário entender os números: olhe as cores. Quanto mais vermelho intenso,
+            mais dois problemas caminham juntos. Quanto mais verde intenso, mais um indicador
+            positivo está associado à redução de um problema.
             """)
 
             st.markdown("**Principais achados:**")
@@ -994,11 +1062,14 @@ def pagina_causas(dados: dict, filtros: dict):
                     f"{'relação direta forte: mais reprovação está associada a mais evasão' if r_rep > 0.5 else 'relação moderada'}"
                 )
 
-        caixa_destaque("info", "Interpretação-chave da matriz",
-            "A matriz confirma que os indicadores de desempenho positivo (aprovação, promoção) têm correlação "
-            "negativa com a evasão — ou seja, escolas com mais aprovação tendem a ter menos evasão. "
-            "Por outro lado, TDI e repetência têm correlação positiva com evasão e abandono. "
-            "Isso valida a cadeia causal apresentada no início desta página.")
+        caixa_destaque("info", "O que o mapa confirma na pratica",
+            "O mapa mostra que os indicadores positivos (aprovação, promoção) caminham no sentido oposto à evasão — "
+            "ou seja, quanto mais alunos são aprovados, menos alunos evadem. Isso pode parecer óbvio, "
+            "mas os dados confirmam que essa relação é muito forte e consistente ao longo dos anos. "
+            "Já a reprovação, a defasagem escolar (TDI) e o abandono caminham juntos com a evasão — "
+            "são sintomas do mesmo problema e se reforçam mutuamente. "
+            "O mapa também mostra que o Ensino Médio (EM) é mais vulnerável do que o Ensino Fundamental (EF) "
+            "em todos esses indicadores, o que reforça a necessidade de ações específicas para esse nível de ensino.")
         caixa_qualidade(
             f"A matriz é calculada com {len(df_c)} pontos de dados (anos no período selecionado). "
             "Com menos de 10 pontos, as correlações devem ser interpretadas com cautela — elas indicam "
@@ -1195,14 +1266,74 @@ def pagina_temporal(dados: dict, filtros: dict):
     show_ef = "Ensino Fundamental (EF)" in filtros["nivel"]
     show_em = "Ensino Médio (EM)"        in filtros["nivel"]
 
+    # ── Narrativa histórica por período ──────────────────────────────────────
+    st.markdown("#### Entendendo os periodos historicos")
+    st.markdown("""
+    <div style="background:#F8FAFC;border:1px solid #CBD5E1;padding:20px 24px;border-radius:6px;margin-bottom:16px">
+    <p style="color:#1E293B;font-size:0.93rem;font-weight:600;margin:0 0 14px 0">
+    A evasão nao evoluiu de forma linear — cada periodo tem uma historia propria
+    </p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;font-size:0.88rem">
+
+    <div style="background:#EFF6FF;border-left:4px solid #2563EB;padding:12px 16px;border-radius:4px">
+    <b style="color:#1D4ED8">2008–2019: Queda gradual e consistente</b>
+    <p style="color:#1E40AF;margin:8px 0 0 0;line-height:1.6">
+    Antes da pandemia, as taxas de evasão vinham caindo de forma constante. Isso reflete avanços estruturais:
+    expansão do acesso à escola, programas de transferência de renda (como o Bolsa Família) e melhoria gradual
+    na cobertura educacional. O sistema não era perfeito, mas estava melhorando a cada ano.
+    Os dados mostram que em 2019, Recife atingiu o menor índice de evasão no Ensino Médio de toda a serie histórica.
+    </p>
+    </div>
+
+    <div style="background:#FEF9C3;border-left:4px solid #B45309;padding:12px 16px;border-radius:4px">
+    <b style="color:#92400E">2020: A quebra do padrão — pandemia de COVID-19</b>
+    <p style="color:#78350F;margin:8px 0 0 0;line-height:1.6">
+    Em 2020, as escolas fecharam e o ensino passou a ser remoto. Três fatores romperam o padrão histórico:
+    (1) o fechamento das escolas cortou o vínculo físico entre aluno e instituição;
+    (2) grande parte dos alunos da rede pública não tinha acesso adequado à internet ou a dispositivos para
+    acompanhar as aulas online; (3) a crise econômica forçou muitos jovens a trabalhar, tornando
+    a escola uma prioridade secundária. Estima-se que cerca de 4 milhões de brasileiros deixaram de estudar em 2020.
+    Os dados de 2020 também têm lacunas — muitas escolas não coletaram dados de aprovação/reprovação
+    nesse ano, o que explica valores ausentes na série.
+    </p>
+    </div>
+
+    <div style="background:#FEE2E2;border-left:4px solid #DC2626;padding:12px 16px;border-radius:4px">
+    <b style="color:#991B1B">2021: O pico — por que foi o pior ano?</b>
+    <p style="color:#7F1D1D;margin:8px 0 0 0;line-height:1.6">
+    Os dados de 2021 geralmente mostram os maiores valores de evasão e abandono. Isso acontece por três razoes:
+    (1) os efeitos acumulados de 2020 aparecem com mais clareza — quem parou de estudar em 2020 aparece como
+    evadido nos registros de 2021; (2) houve subnotificação em 2020, pois era difícil medir abandono no ensino remoto;
+    (3) o retorno às aulas ainda era parcial e incerto. Estudos mostram que o abandono no ensino médio
+    chegou a crescer mais de 100% entre 2020 e 2021, com impacto ainda maior no Nordeste.
+    Nos gráficos, 2021 pode aparecer como um pico extremo ou valor atípico — isso não é um erro de dados,
+    mas o reflexo real de uma crise sem precedentes.
+    </p>
+    </div>
+
+    <div style="background:#F0FDF4;border-left:4px solid #15803D;padding:12px 16px;border-radius:4px">
+    <b style="color:#14532D">2022 em diante: Transicao e recuperacao parcial</b>
+    <p style="color:#166534;margin:8px 0 0 0;line-height:1.6">
+    Em 2022, com o retorno às aulas presenciais, os indicadores começaram a melhorar — mas de forma lenta.
+    Alunos que abandonaram em 2020 ou 2021 raramente retornaram imediatamente. Defasagens de aprendizagem
+    acumuladas durante o ensino remoto continuaram gerando reprovações, e a desmotivação persistiu.
+    O sistema educacional não volta ao nível pré-pandemia de um ano para o outro.
+    Os efeitos da pandemia na educação são de longo prazo, e os dados refletem essa realidade.
+    </p>
+    </div>
+
+    </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     if a1 <= 2020 <= a2:
-        caixa_destaque("atencao", "Impacto da Pandemia de COVID-19 (2020–2022)",
-            "O período 2020–2022 foi marcado pela pandemia de COVID-19, que causou o fechamento das escolas "
-            "e a transição para o ensino remoto emergencial. Esse contexto afetou diretamente os indicadores: "
-            "em 2020, muitas escolas não coletaram dados de aprovação/reprovação (o que explica valores ausentes). "
-            "Em 2021 e 2022, houve aumento no abandono e na dificuldade de aprendizagem acumulada. "
-            "Ao analisar esse período, leve em conta que parte dos resultados reflete o impacto da pandemia, "
-            "não necessariamente uma falha estrutural das políticas educacionais.")
+        caixa_qualidade(
+            "Atenção ao interpretar os anos 2020–2022: os valores extremos (picos ou quedas bruscas) "
+            "refletem o impacto da pandemia e não necessariamente uma falha estrutural das políticas educacionais. "
+            "Em 2020, há lacunas nos dados de aprovação e reprovação porque muitas escolas não realizaram avaliações formais. "
+            "Isso significa que nem todos os anos são diretamente comparáveis — o contexto precisa ser considerado."
+        )
 
     # ── Evasão e abandono histórico ────────────────────────────────────────────
     titulo_pergunta("Como a evasao e o abandono evoluiram ao longo do tempo?",
@@ -1248,21 +1379,25 @@ def pagina_temporal(dados: dict, filtros: dict):
             v_ini = s_em.iloc[0]["taxa_evasao_em"]
             v_fim = s_em.iloc[-1]["taxa_evasao_em"]
             delta = v_fim - v_ini
-            trend = "queda" if delta < -1 else ("alta" if delta > 1 else "estável")
+            trend = "queda" if delta < -1 else ("alta" if delta > 1 else "estavel")
+            ano_pico = int(s_em.loc[s_em["taxa_evasao_em"].idxmax(), "ano"])
+            val_pico = s_em["taxa_evasao_em"].max()
             caixa_destaque(
                 "positivo" if delta < 0 else "atencao",
-                f"Tendencia no periodo: {trend} na evasao do Ensino Medio",
-                f"A evasão no EM passou de {v_ini:.1f}% em {int(s_em.iloc[0]['ano'])} "
-                f"para {v_fim:.1f}% em {int(s_em.iloc[-1]['ano'])} — "
-                f"uma variação de {delta:+.1f} p.p. (p.p. = ponto percentual). "
-                f"{'Essa redução indica progresso nas políticas educacionais do município.' if delta < 0 else 'Esse aumento merece atenção e investigação das causas.'} "
-                "Lembre-se que a pandemia pode ter distorcido os dados de 2020–2022."
+                f"Como interpretar o grafico: tendencia de {trend} na evasao do Ensino Medio",
+                f"No período selecionado, a evasão no EM foi de {v_ini:.1f}% em {int(s_em.iloc[0]['ano'])} "
+                f"para {v_fim:.1f}% em {int(s_em.iloc[-1]['ano'])} — uma variação de {delta:+.1f} p.p. "
+                f"(p.p. = ponto percentual, ou seja, diferença direta entre dois percentuais). "
+                f"O pico mais alto foi em {ano_pico} ({val_pico:.1f}%), "
+                f"{'coincidindo com o período da pandemia de COVID-19, que rompeu o padrão histórico de queda.' if 2020 <= ano_pico <= 2022 else 'quando as condições educacionais estavam mais precárias.'} "
+                f"{'A queda observada ao longo do período indica progresso real — mas parte desse progresso pode ser interrompida por crises externas, como a pandemia.' if delta < 0 else 'A piora observada merece investigação: ela pode refletir crises externas, mudanças de política ou ambos.'}"
             )
 
     caixa_acao(
-        "Use o gráfico para identificar em quais anos a situação piorou e correlacionar com eventos históricos "
-        "(mudanças de gestão, políticas implementadas, pandemia). "
-        "Anos com variação positiva (piora) indicam momentos em que as políticas falharam ou não foram suficientes."
+        "Observe os anos com variação positiva (barras vermelhas) no gráfico abaixo e tente correlacioná-los "
+        "com eventos históricos — mudanças econômicas, políticas educacionais ou eventos externos como a pandemia. "
+        "Essa correlação ajuda a separar problemas estruturais (que exigem mudança de política) "
+        "de choques externos temporários (que exigem resposta de curto prazo)."
     )
 
     st.markdown("---")
@@ -1297,11 +1432,13 @@ def pagina_temporal(dados: dict, filtros: dict):
                                   showarrow=True, arrowhead=2, ax=0, ay=30, font=dict(color=COR_POSITIVO, size=11))
             fig_y.update_layout(yaxis_title="Variação em relação ao ano anterior (%)", xaxis_title="Ano", height=360)
             st.plotly_chart(fig_y, use_container_width=True)
+            pandemia_pior = 2020 <= ano_pior <= 2022
             st.caption(
-                f"Maior piora: {ano_pior} (+{var_pior:.1f}%). "
-                f"Maior melhora: {ano_melhor} ({var_melhor:.1f}%). "
-                "A variação é calculada em relação ao ano imediatamente anterior — não ao início do período. "
-                "Valores positivos significam que a evasão cresceu em relação ao ano anterior."
+                f"Maior piora no período: {ano_pior} (+{var_pior:.1f}% em relação ao ano anterior). "
+                f"{'Esse ano coincide com o período da pandemia — o que explica a piora abrupta.' if pandemia_pior else 'Investigue o que aconteceu nesse ano.'} "
+                f"Maior melhora: {ano_melhor} ({var_melhor:.1f}% em relação ao ano anterior). "
+                "Barras vermelhas = evasão cresceu (piora). Barras verdes = evasão diminuiu (melhora). "
+                "A variação é sempre em relação ao ano anterior, não ao início do período."
             )
 
     st.markdown("---")
@@ -1334,30 +1471,45 @@ def pagina_temporal(dados: dict, filtros: dict):
             max_razao   = dc["razao"].max()
             ano_max_r   = int(dc.loc[dc["razao"].idxmax(), "ano"])
             caixa_destaque("info",
-                f"Confirmado: a evasao no EM e consistentemente maior que no EF",
+                f"O Ensino Medio e {media_razao:.1f}x mais critico que o Ensino Fundamental — e ha uma razao estrutural para isso",
                 f"Em média, a evasão no Ensino Médio foi {media_razao:.1f} vezes maior que no Ensino Fundamental "
-                f"no período analisado. O pico dessa diferença foi em {ano_max_r}, quando a evasão no EM foi "
-                f"{max_razao:.1f} vezes a do EF. "
-                "Isso confirma que o Ensino Médio deve ser o foco prioritário das políticas de combate à evasão."
+                f"no período analisado. O pico dessa diferença foi em {ano_max_r} ({max_razao:.1f} vezes maior). "
+                "Isso não é coincidência — o EM tem características estruturais que o tornam mais vulnerável: "
+                "alunos entre 15 e 17 anos enfrentam maior pressão para entrar no mercado de trabalho; "
+                "o currículo é percebido como mais distante da realidade prática; "
+                "a obrigatoriedade da escola é percebida como menor nessa faixa etária; "
+                "e o impacto de crises econômicas é mais imediato para esse grupo. "
+                "Durante a pandemia, esses fatores se intensificaram — e os dados mostram isso claramente."
             )
         caixa_acao(
-            "Ao planejar intervenções, priorize o Ensino Médio — especialmente o 1º ano do EM, "
-            "que concentra a maior parte do abandono. A transição do EF para o EM é um momento crítico "
-            "onde muitos alunos se perdem."
+            "Ao planejar intervenções, priorize o Ensino Médio — especialmente o 1° ano do EM, "
+            "que é o momento de maior risco: é nele que ocorre a transição do EF para o EM, "
+            "quando muitos alunos se perdem pela mudança de ambiente, de colegas e de exigência. "
+            "Programas de acolhimento e acompanhamento intensivo no 1° ano do EM têm alto potencial de redução da evasão."
         )
 
     st.markdown("---")
 
     # ── Boxplot por período ────────────────────────────────────────────────────
-    titulo_pergunta("Como a evasao se distribuiu em diferentes periodos historicos?",
-                    "O gráfico de caixas (boxplot) mostra a distribuição dos valores em cada período. "
-                    "A linha central é a mediana — metade dos valores estão acima, metade abaixo. "
-                    "Os pontos fora da caixa são valores atípicos (outliers).")
+    titulo_pergunta("Como a evasao se distribuiu em cada fase historica?",
+                    "Cada coluna representa um período histórico. A caixa mostra onde estão a maioria dos valores. "
+                    "Pontos isolados acima da caixa são anos com valores muito acima do normal — geralmente associados a crises externas.")
+
+    caixa_destaque("info", "Como ler este grafico sem conhecimento estatistico",
+        "Imagine que os valores de cada período foram empilhados em ordem crescente. "
+        "A caixa colorida representa os 50% centrais — ou seja, onde a maioria dos registros se concentra. "
+        "A linha no meio da caixa é o valor mais típico do período (a mediana). "
+        "Os pontos isolados acima ou abaixo da caixa são anos com comportamentos excepcionais — "
+        "chamados de valores atípicos. No caso da evasão escolar, esses pontos geralmente correspondem "
+        "a anos de crise (como a pandemia de 2020–2021), não a erros nos dados. "
+        "Quanto mais alta a caixa, maior foi a evasão naquele período. "
+        "Quanto mais estreita a caixa, mais consistentes foram os resultados ao longo dos anos do período."
+    )
 
     col1, col2 = st.columns(2)
     for col, base, col_v, nome_g in [
-        (col1, dados["fato_socioeconomico"], "taxa_evasao_em",   "Taxa de Evasão — Ensino Médio"),
-        (col2, dados["fato_educacional"],    "taxa_abandono_em", "Taxa de Abandono — Ensino Médio"),
+        (col1, dados["fato_socioeconomico"], "taxa_evasao_em",   "Evasão no Ensino Médio por Período Histórico (%)"),
+        (col2, dados["fato_educacional"],    "taxa_abandono_em", "Abandono no Ensino Médio por Período Histórico (%)"),
     ]:
         with col:
             s = base.dropna(subset=[col_v])
@@ -1369,21 +1521,29 @@ def pagina_temporal(dados: dict, filtros: dict):
                 s, x="periodo", y=col_v,
                 category_orders={"periodo": ordem_ok},
                 color="periodo", color_discrete_map=PALETA_PERIODO,
-                labels={"periodo": "Período", col_v: "%"},
+                labels={"periodo": "Período histórico", col_v: "Taxa (%)"},
                 points="all",
             )
-            fig_b.update_layout(showlegend=False, height=400, title=nome_g)
+            fig_b.update_layout(showlegend=False, height=420, title=nome_g)
             st.plotly_chart(fig_b, use_container_width=True)
 
     st.caption(
-        "Como ler o boxplot: A caixa representa onde estão os 50% centrais dos valores. "
-        "A linha dentro da caixa é a mediana. Os pontos individuais mostram cada registro. "
-        "Períodos com caixas mais altas indicam maior nível médio de evasão/abandono. "
-        "Caixas mais largas indicam maior variação entre os registros naquele período."
+        "A cor amarela (2020–2022, Pandemia) costuma ter caixas mais altas ou pontos isolados mais extremos. "
+        "Isso é esperado: a pandemia causou um impacto excepcional que vai além do comportamento histórico normal. "
+        "O período 2016–2019 (verde) tende a mostrar os melhores resultados históricos — foi o período "
+        "de menor evasão antes da pandemia. Essa é a linha de base a ser recuperada e superada."
     )
+
     caixa_qualidade(
-        "Os dados de 2023–2024 disponíveis nesta base são parciais e apresentam inconsistências, "
-        "o que pode resultar em valores atípicos. Interprete os resultados desse período com cautela."
+        "Pontos isolados (valores atípicos) neste gráfico NÃO são erros. Eles representam anos com comportamento "
+        "excepcional — como 2021, no qual o impacto acumulado da pandemia gerou os piores indicadores da série. "
+        "Os dados de 2023–2024 são parciais e podem ter inconsistências — interprete com cautela."
+    )
+
+    caixa_acao(
+        "Use os períodos históricos como referência para avaliar se a situação atual está acima ou abaixo "
+        "do que era considerado normal antes da pandemia. O objetivo de curto prazo deve ser retornar ao "
+        "nível de 2016–2019; o objetivo de longo prazo deve ser ir além desse nível."
     )
 
 

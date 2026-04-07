@@ -14,7 +14,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 # ---------------------------------------------------------------------------
-# Configuração
+# Configuração da página
 # ---------------------------------------------------------------------------
 st.set_page_config(
     page_title="Evasão Escolar — Recife",
@@ -24,40 +24,43 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    .block-container { padding-top: 1.2rem; padding-bottom: 2rem; }
-    h1 { font-size: 1.6rem !important; font-weight: 700; color: #1E3A5F; }
-    h2 { font-size: 1.2rem !important; font-weight: 600; color: #1E3A5F; }
-    h3 { font-size: 1rem !important; font-weight: 600; color: #334155; }
+    .block-container { padding-top: 1.4rem; padding-bottom: 2.5rem; }
+    h1 { font-size: 1.55rem !important; font-weight: 700; color: #1E3A5F; }
+    h2 { font-size: 1.18rem !important; font-weight: 600; color: #1E3A5F; margin-top:1.6rem !important; }
+    h3 { font-size: 1rem !important; font-weight: 600; color: #334155; margin-top:1.2rem !important; }
     .stMetric label { font-size: 0.78rem !important; color: #64748B; }
-    div[data-testid="stMetricValue"] { font-size: 1.4rem !important; }
+    div[data-testid="stMetricValue"] { font-size: 1.35rem !important; }
+    div[data-testid="stMetricDelta"] { font-size: 0.78rem !important; }
+    hr { border:none; border-top:1px solid #E2E8F0; margin:1.4rem 0; }
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# Caminhos
+# Paths e constantes de cor
 # ---------------------------------------------------------------------------
 ROOT = Path(__file__).resolve().parent.parent
 PROC = ROOT / "data" / "processed"
 
-# ---------------------------------------------------------------------------
-# Cores
-# ---------------------------------------------------------------------------
 COR_PRIMARIA = "#1E3A5F"
 COR_EF       = "#2563EB"
 COR_EM       = "#DC2626"
 COR_ABANDONO = "#EA580C"
 COR_OK       = "#15803D"
 COR_CINZA    = "#64748B"
-COR_CRITICO  = "#991B1B"
 
-CORES_RISCO = {"Critico": "#991B1B", "Alto": "#DC2626", "Moderado": "#B45309", "Baixo": "#15803D"}
+CORES_RISCO = {
+    "Critico":  "#991B1B",
+    "Alto":     "#DC2626",
+    "Moderado": "#B45309",
+    "Baixo":    "#15803D",
+}
 
 PALETA_PERIODO = {
-    "2006–2010":             "#94A3B8",
-    "2011–2015":             "#60A5FA",
-    "2016–2019":             "#34D399",
-    "2020–2022 (Pandemia)":  "#FBBF24",
-    "2023–2024":             "#F87171",
+    "2006–2010":            "#94A3B8",
+    "2011–2015":            "#60A5FA",
+    "2016–2019":            "#34D399",
+    "2020–2022 (Pandemia)": "#FBBF24",
+    "2023–2024":            "#F87171",
 }
 
 LIMIARES = {"baixo": 20, "moderado": 35, "alto": 50}
@@ -66,20 +69,19 @@ LIMIARES = {"baixo": 20, "moderado": 35, "alto": 50}
 # Glossário
 # ---------------------------------------------------------------------------
 GLOSSARIO = {
-    "Evasão escolar":   "Saída definitiva do aluno do sistema de ensino.",
-    "Abandono escolar": "Saída do aluno durante o ano letivo em curso (precursor da evasão).",
-    "TDI":              "Taxa de Distorção Idade-Série — percentual de alunos com mais de 2 anos de atraso em relação à série esperada.",
-    "p.p.":             "Ponto percentual — diferença direta entre dois percentuais (ex: de 10% para 12% = +2 p.p.).",
-    "ATU":              "Média de Alunos por Turma.",
-    "HAD":              "Horas-Aula Diárias.",
-    "EF":               "Ensino Fundamental (1º ao 9º ano).",
-    "EM":               "Ensino Médio (1º ao 3º ano).",
-    "Score de Risco":   "Indicador 0–100: Abandono EM (40%) + TDI EM (30%) + Reprovação EM (30%).",
-    "EJA":              "Educação de Jovens e Adultos — modalidade alternativa para quem não completou o ensino regular na idade certa.",
+    "Evasão escolar":        "Saída definitiva do aluno do sistema de ensino, sem previsão de retorno.",
+    "Abandono escolar":      "Saída do aluno durante o ano letivo em curso. É o sinal imediato que antecede a evasão definitiva.",
+    "TDI":                   "Taxa de Distorção Idade-Série — percentual de alunos que estão cursando uma série com mais de 2 anos de atraso em relação à idade esperada.",
+    "p.p. (ponto percentual)": "Diferença direta entre dois percentuais. Exemplo: de 10% para 13% representa um aumento de 3 p.p.",
+    "EF":                    "Ensino Fundamental — do 1.º ao 9.º ano.",
+    "EM":                    "Ensino Médio — do 1.º ao 3.º ano.",
+    "ATU":                   "Média de Alunos por Turma.",
+    "Score de Risco":        "Indicador de 0 a 100 calculado como: Abandono EM (40%) + TDI EM (30%) + Reprovação EM (30%). Quanto maior o score, maior o risco de evasão.",
+    "EJA":                   "Educação de Jovens e Adultos — modalidade para quem não concluiu o ensino regular na idade prevista.",
 }
 
 # ---------------------------------------------------------------------------
-# Carregamento
+# Carregamento de dados
 # ---------------------------------------------------------------------------
 @st.cache_data(show_spinner="Carregando dados...")
 def carregar_dados() -> dict[str, pd.DataFrame]:
@@ -95,7 +97,7 @@ def garantir_dados():
         st.cache_data.clear()
 
 # ---------------------------------------------------------------------------
-# Score / risco
+# Score de risco
 # ---------------------------------------------------------------------------
 def calcular_score(df: pd.DataFrame) -> pd.Series:
     def col(c): return df[c].fillna(0) if c in df.columns else pd.Series(0.0, index=df.index)
@@ -107,54 +109,54 @@ def calcular_score(df: pd.DataFrame) -> pd.Series:
 
 
 def classificar_risco(score: pd.Series) -> pd.Series:
-    return pd.cut(score,
+    return pd.cut(
+        score,
         bins=[-np.inf, LIMIARES["baixo"], LIMIARES["moderado"], LIMIARES["alto"], np.inf],
-        labels=["Baixo", "Moderado", "Alto", "Critico"]).astype(str)
+        labels=["Baixo", "Moderado", "Alto", "Critico"],
+    ).astype(str)
 
 # ---------------------------------------------------------------------------
 # Insights automáticos
 # ---------------------------------------------------------------------------
 def computar_insights(dados: dict) -> dict:
-    """Calcula métricas-chave automaticamente para uso em todos os gráficos."""
-    s = dados["dim_socio_anual"].copy().sort_values("ano")
-    fi = dados["fato_integrado"].copy().sort_values("ano")
+    """Calcula métricas globais uma única vez para todos os gráficos."""
+    s  = dados["dim_socio_anual"].sort_values("ano")
+    fi = dados["fato_integrado"].sort_values("ano")
     out = {}
 
     if "taxa_evasao_em" in s.columns:
         em = s.dropna(subset=["taxa_evasao_em"])
         if not em.empty:
-            out["pior_ano_evasao_em"]   = int(em.loc[em["taxa_evasao_em"].idxmax(), "ano"])
-            out["pior_val_evasao_em"]   = round(em["taxa_evasao_em"].max(), 1)
-            out["melhor_ano_evasao_em"] = int(em.loc[em["taxa_evasao_em"].idxmin(), "ano"])
-            out["melhor_val_evasao_em"] = round(em["taxa_evasao_em"].min(), 1)
-            if len(em) >= 2:
-                out["delta_total_em"] = round(em.iloc[-1]["taxa_evasao_em"] - em.iloc[0]["taxa_evasao_em"], 1)
-                out["ano_ini_em"]     = int(em.iloc[0]["ano"])
-                out["ano_fim_em"]     = int(em.iloc[-1]["ano"])
-                out["val_ini_em"]     = round(em.iloc[0]["taxa_evasao_em"], 1)
-                out["val_fim_em"]     = round(em.iloc[-1]["taxa_evasao_em"], 1)
+            out["pior_ano"]    = int(em.loc[em["taxa_evasao_em"].idxmax(), "ano"])
+            out["pior_val"]    = round(em["taxa_evasao_em"].max(), 1)
+            out["melhor_ano"]  = int(em.loc[em["taxa_evasao_em"].idxmin(), "ano"])
+            out["melhor_val"]  = round(em["taxa_evasao_em"].min(), 1)
+            out["ano_ini"]     = int(em.iloc[0]["ano"])
+            out["ano_fim"]     = int(em.iloc[-1]["ano"])
+            out["val_ini"]     = round(em.iloc[0]["taxa_evasao_em"], 1)
+            out["val_fim"]     = round(em.iloc[-1]["taxa_evasao_em"], 1)
+            out["delta_total"] = round(out["val_fim"] - out["val_ini"], 1)
 
     if "indice_risco_evasao" in fi.columns:
         ri = fi.dropna(subset=["indice_risco_evasao"])
         if not ri.empty:
-            out["score_atual"]  = round(ri.iloc[-1]["indice_risco_evasao"], 1)
-            out["score_ant"]    = round(ri.iloc[-2]["indice_risco_evasao"], 1) if len(ri) > 1 else out["score_atual"]
-            out["ano_score"]    = int(ri.iloc[-1]["ano"])
-            out["nivel_score"]  = classificar_risco(pd.Series([out["score_atual"]])).iloc[0]
+            out["score_atual"] = round(ri.iloc[-1]["indice_risco_evasao"], 1)
+            out["score_ant"]   = round(ri.iloc[-2]["indice_risco_evasao"], 1) if len(ri) > 1 else out["score_atual"]
+            out["ano_score"]   = int(ri.iloc[-1]["ano"])
+            out["nivel_score"] = classificar_risco(pd.Series([out["score_atual"]])).iloc[0]
 
     tend = dados.get("tendencia_anual", pd.DataFrame())
     if "var_taxa_evasao_em" in tend.columns:
         t = tend.dropna(subset=["var_taxa_evasao_em"])
         if not t.empty:
-            out["maior_alta_ano"] = int(t.loc[t["var_taxa_evasao_em"].idxmax(), "ano"])
-            out["maior_alta_val"] = round(t["var_taxa_evasao_em"].max(), 1)
-            out["maior_queda_ano"] = int(t.loc[t["var_taxa_evasao_em"].idxmin(), "ano"])
-            out["maior_queda_val"] = round(t["var_taxa_evasao_em"].min(), 1)
-
+            out["pior_ano_var"]    = int(t.loc[t["var_taxa_evasao_em"].idxmax(), "ano"])
+            out["pior_val_var"]    = round(t["var_taxa_evasao_em"].max(), 1)
+            out["melhor_ano_var"]  = int(t.loc[t["var_taxa_evasao_em"].idxmin(), "ano"])
+            out["melhor_val_var"]  = round(t["var_taxa_evasao_em"].min(), 1)
     return out
 
 # ---------------------------------------------------------------------------
-# Componentes visuais
+# Utilitários visuais
 # ---------------------------------------------------------------------------
 def hex_rgba(hex_color: str, alpha: float = 0.15) -> str:
     h = hex_color.lstrip("#")
@@ -162,110 +164,95 @@ def hex_rgba(hex_color: str, alpha: float = 0.15) -> str:
     return f"rgba({r},{g},{b},{alpha})"
 
 
-def scatter_tendencia(fig: go.Figure, x, y, name: str, cor: str, texts=None) -> go.Figure:
+def scatter_tendencia(fig: go.Figure, x, y, cor: str, texts=None) -> go.Figure:
     mask = ~(np.isnan(x) | np.isnan(y))
     xc, yc = np.array(x)[mask], np.array(y)[mask]
     fig.add_trace(go.Scatter(
-        x=xc, y=yc,
-        mode="markers+text" if texts is not None else "markers",
-        name=name, text=np.array(texts)[mask] if texts is not None else None,
+        x=xc, y=yc, mode="markers+text" if texts is not None else "markers",
+        text=np.array(texts)[mask] if texts is not None else None,
         textposition="top center",
-        marker=dict(color=cor, size=10, line=dict(color="white", width=1)),
+        marker=dict(color=cor, size=11, line=dict(color="white", width=1.5)),
+        showlegend=False,
     ))
-    if len(xc) >= 2:
+    if len(xc) >= 3:
         z = np.polyfit(xc, yc, 1)
         xl = np.linspace(xc.min(), xc.max(), 100)
         fig.add_trace(go.Scatter(
             x=xl, y=np.poly1d(z)(xl), mode="lines",
             line=dict(color=cor, width=2, dash="dash"),
-            name="Tendencia", showlegend=False,
+            name="Tendencia linear", showlegend=False,
         ))
-    return fig
+        return fig, z[0]  # retorna o coeficiente angular
+    return fig, None
 
 
-def bloco_insight(tipo: str, titulo: str, texto: str):
-    """Bloco compacto de insight — usa st nativo quando possivel."""
-    emoji_map = {"bom": "✓", "ruim": "!", "info": "i", "acao": "→"}
-    st.markdown(
-        f"""<div style="padding:10px 16px;border-radius:4px;margin:6px 0 12px 0;
-        border-left:4px solid {'#15803D' if tipo=='bom' else '#DC2626' if tipo=='ruim' else '#B45309' if tipo=='acao' else '#2563EB'};
-        background:{'#F0FDF4' if tipo=='bom' else '#FEF2F2' if tipo=='ruim' else '#FFFBEB' if tipo=='acao' else '#EFF6FF'}">
-        <b style="color:{'#14532D' if tipo=='bom' else '#7F1D1D' if tipo=='ruim' else '#78350F' if tipo=='acao' else '#1E40AF'};
-        font-size:0.8rem;text-transform:uppercase;letter-spacing:0.04em">{titulo}</b>
-        <p style="color:#1E293B;font-size:0.88rem;margin:4px 0 0 0;line-height:1.55">{texto}</p>
-        </div>""",
-        unsafe_allow_html=True,
-    )
-
-
-def transicao_pagina(texto: str):
-    """Linha de conexão entre páginas."""
-    st.markdown(
-        f'<p style="color:#64748B;font-size:0.85rem;font-style:italic;'
-        f'border-top:1px solid #E2E8F0;margin-top:20px;padding-top:10px">{texto}</p>',
-        unsafe_allow_html=True,
-    )
-
-
-def secao(titulo: str, contexto: str = ""):
-    st.markdown(f"### {titulo}")
-    if contexto:
-        st.caption(contexto)
-
-
-def pandemia_vrect(fig, a1, a2):
+def vrect_pandemia(fig, a1, a2):
     if a1 <= 2020 <= a2:
-        fig.add_vrect(x0=2019.5, x1=2022.5, fillcolor="#FEF9C3", opacity=0.3, line_width=0,
-                      annotation_text="Pandemia (2020–22)", annotation_position="top left",
-                      annotation_font=dict(size=10, color="#92400E"))
+        fig.add_vrect(
+            x0=2019.5, x1=2022.5, fillcolor="#FEF9C3", opacity=0.35, line_width=0,
+            annotation_text="Pandemia (2020–22)", annotation_position="top left",
+            annotation_font=dict(size=10, color="#92400E"),
+        )
+
+
+def pre_grafico(titulo: str, insight: str, detalhes: str = ""):
+    """Bloco de texto ANTES do gráfico: o que será visto e o insight principal."""
+    st.markdown(f"## {titulo}")
+    st.info(f"**Insight principal:** {insight}")
+    if detalhes:
+        st.write(detalhes)
+
+
+def pos_grafico(texto: str, tipo: str = "info"):
+    """Bloco de texto DEPOIS do gráfico: interpretação dos dados."""
+    if tipo == "positivo":
+        st.success(texto)
+    elif tipo == "atencao":
+        st.warning(texto)
+    elif tipo == "critico":
+        st.error(texto)
+    else:
+        st.info(texto)
+
 
 # ---------------------------------------------------------------------------
-# SIDEBAR
+# BARRA LATERAL
 # ---------------------------------------------------------------------------
 def sidebar(dados: dict) -> dict:
     st.sidebar.markdown(
-        f'<p style="color:{COR_PRIMARIA};font-size:1rem;font-weight:700;margin:0">Evasão Escolar — Recife</p>'
-        '<p style="color:#64748B;font-size:0.78rem;margin:2px 0 0 0">INEP / MEC | 2008–2022</p>',
+        f'<p style="color:{COR_PRIMARIA};font-size:1rem;font-weight:700;margin:0 0 2px 0">'
+        'Evasao Escolar — Recife</p>'
+        '<p style="color:#64748B;font-size:0.78rem;margin:0">INEP/MEC | 2008–2022</p>',
         unsafe_allow_html=True,
     )
     st.sidebar.divider()
 
     anos = sorted(dados["fato_integrado"]["ano"].unique())
     a_min, a_max = int(min(anos)), int(max(anos))
-    default_ini = max(a_min, a_max - 3)
+    default_ini  = max(a_min, a_max - 3)   # padrão: últimos 4 anos
 
     filtros = {}
     filtros["ano_range"] = st.sidebar.slider(
-        "Periodo de analise", min_value=a_min, max_value=a_max,
+        "Periodo de analise",
+        min_value=a_min, max_value=a_max,
         value=(default_ini, a_max),
-        help="Padrao: ultimos 4 anos. Amplie para ver a serie historica completa.",
+        help="Padrao: ultimos 4 anos (2019–2022). Arraste para ver a serie historica completa.",
     )
     filtros["nivel"] = st.sidebar.multiselect(
         "Nivel de ensino",
         ["Ensino Fundamental (EF)", "Ensino Medio (EM)"],
         default=["Ensino Fundamental (EF)", "Ensino Medio (EM)"],
-    )
-    filtros["risco_filtro"] = st.sidebar.multiselect(
-        "Nivel de risco (ranking)",
-        ["Baixo", "Moderado", "Alto", "Critico"],
-        default=["Alto", "Critico"],
+        help="EF = 1.o ao 9.o ano | EM = 1.o ao 3.o ano",
     )
 
     st.sidebar.divider()
-    with st.sidebar.expander("Escala de risco"):
-        st.caption("""
-        **Critico** — Score acima de 50  
-        **Alto** — Score entre 35 e 50  
-        **Moderado** — Score entre 20 e 35  
-        **Baixo** — Score abaixo de 20  
-        *(Score = Abandono 40% + TDI 30% + Reprovação 30%)*
-        """)
-    with st.sidebar.expander("Glossario de termos"):
+    with st.sidebar.expander("Glossario — termos utilizados"):
         for termo, defn in GLOSSARIO.items():
-            st.markdown(f"**{termo}:** {defn}")
+            st.markdown(f"**{termo}**")
+            st.caption(defn)
 
     st.sidebar.divider()
-    if st.sidebar.button("Reprocessar ETL"):
+    if st.sidebar.button("Reprocessar dados (ETL)"):
         st.cache_data.clear()
         sys.path.insert(0, str(ROOT))
         from etl.etl_pipeline import run_etl
@@ -274,353 +261,424 @@ def sidebar(dados: dict) -> dict:
 
     return filtros
 
+
 # ===========================================================================
-# PÁGINA 1 — VISÃO GERAL: "Qual é o problema?"
+# PAGINA 1 — CONTEXTO GERAL
 # ===========================================================================
-def pagina_visao_geral(dados: dict, filtros: dict, insights: dict):
-    st.markdown("# Visão Geral — Qual é o problema?")
-    st.caption(
-        "Ponto de partida do painel. Mostre esta página para qualquer pessoa que precise "
-        "entender rapidamente a situação da evasão escolar em Recife."
-    )
+def pagina_contexto(dados: dict, filtros: dict, ins: dict):
+    st.markdown("# A Evasao Escolar em Recife — Contexto Geral")
 
     a1, a2 = filtros["ano_range"]
     df = dados["fato_integrado"].copy()
     df = df[(df["ano"] >= a1) & (df["ano"] <= a2)].sort_values("ano")
-    df_educ = dados["fato_educacional"].copy()
-    df_educ = df_educ[(df_educ["ano"] >= a1) & (df_educ["ano"] <= a2)]
 
     if df.empty:
-        st.warning(f"Nenhum dado disponível para {a1}–{a2}. Ajuste o filtro.")
+        st.warning(f"Nenhum dado disponivel para {a1}–{a2}. Ajuste o filtro na barra lateral.")
         return
 
     ultimo = df.iloc[-1]
-    ant    = df.iloc[-2] if len(df) > 1 else ultimo
+    ant    = df.iloc[-2] if len(df) > 1 else df.iloc[0]
 
     def sv(c): return float(ultimo.get(c, np.nan) or np.nan)
     def dpp(c):
-        v1, v2 = sv(c), float(ant.get(c, np.nan) or np.nan)
+        v1 = sv(c)
+        v2 = float(ant.get(c, np.nan) or np.nan)
         return f"{v1-v2:+.1f} p.p." if pd.notna(v1) and pd.notna(v2) else None
 
-    # ── Diagnóstico automático principal ──────────────────────────────────────
-    sc    = insights.get("score_atual", 0)
-    nivel = insights.get("nivel_score", "Baixo")
-    delta_sc = sc - insights.get("score_ant", sc)
-    pior_ano = insights.get("pior_ano_evasao_em")
-    melhor_ano = insights.get("melhor_ano_evasao_em")
-    delta_total = insights.get("delta_total_em")
+    sc    = ins.get("score_atual", 0)
+    nivel = ins.get("nivel_score", "Baixo")
+    delta = sc - ins.get("score_ant", sc)
 
-    # Mensagem principal automática
-    if nivel in ("Critico", "Alto"):
-        st.error(
-            f"**Situacao critica:** Score de Risco atual = {sc:.0f}/100 (nivel {nivel}). "
-            f"Os tres principais indicadores — abandono, defasagem escolar (TDI) e reprovacao — "
-            f"estao simultaneamente elevados. Acao imediata e necessaria."
-        )
-    elif nivel == "Moderado":
-        st.warning(
-            f"**Atencao:** Score de Risco atual = {sc:.0f}/100 (nivel {nivel}). "
-            f"Os indicadores nao estao em crise, mas exigem monitoramento proximo."
-        )
-    else:
+    # ── Diagnóstico automático de abertura ────────────────────────────────────
+    st.markdown(
+        "Este painel analisa os dados de evasão escolar no municipio de Recife entre 2008 e 2022, "
+        "usando informações do INEP (Instituto Nacional de Estudos e Pesquisas Educacionais). "
+        "**Evasão escolar** é quando um aluno sai definitivamente do sistema de ensino — "
+        "diferente do **abandono**, que ocorre durante o ano letivo. "
+        "Ambos são sinais de que algo no sistema educacional (ou na vida do aluno) está falhando."
+    )
+
+    pior_ano  = ins.get("pior_ano")
+    melhor_ano = ins.get("melhor_ano")
+    delta_total = ins.get("delta_total")
+
+    if delta_total is not None and delta_total < -5:
         st.success(
-            f"**Situacao sob controle:** Score de Risco atual = {sc:.0f}/100 (nivel {nivel}). "
-            f"Continue monitorando para identificar tendencias antes que se agravem."
+            f"**Tendencia historica positiva:** entre {ins.get('ano_ini')} e {ins.get('ano_fim')}, "
+            f"a evasao no Ensino Medio caiu {abs(delta_total):.1f} pontos percentuais "
+            f"(de {ins.get('val_ini')}% para {ins.get('val_fim')}%). "
+            "Esse progresso mostra que politicas educacionais de longo prazo funcionam."
         )
-
-    if delta_sc > 2:
-        st.warning(f"**Piora detectada:** o risco subiu {delta_sc:+.1f} pontos em relacao ao ano anterior.")
-    elif delta_sc < -2:
-        st.success(f"**Melhora detectada:** o risco caiu {abs(delta_sc):.1f} pontos em relacao ao ano anterior.")
 
     if pior_ano and 2020 <= pior_ano <= 2022:
-        st.info(
-            f"**Pior ano da serie:** {pior_ano} ({insights.get('pior_val_evasao_em', '?')}% de evasao no EM) — "
-            f"coincide com a pandemia de COVID-19, que fechou escolas e gerou crise economica."
+        st.warning(
+            f"**Pandemia rompeu o progresso:** o pior ano da serie foi {pior_ano} "
+            f"({ins.get('pior_val')}% de evasao no EM). "
+            "O fechamento das escolas e a crise economica de 2020–2021 reverteram avancos "
+            "que levaram anos para ser conquistados."
         )
     elif pior_ano:
-        st.info(f"**Pior ano da serie:** {pior_ano} ({insights.get('pior_val_evasao_em', '?')}% de evasao no EM).")
+        st.warning(
+            f"**Pior ano da serie:** {pior_ano} ({ins.get('pior_val')}% de evasao no EM)."
+        )
 
     if melhor_ano:
         st.success(
-            f"**Melhor ano da serie:** {melhor_ano} ({insights.get('melhor_val_evasao_em', '?')}% de evasao no EM). "
-            f"Este e o nivel de referencia a ser recuperado e superado."
+            f"**Melhor ano da serie:** {melhor_ano} ({ins.get('melhor_val')}% de evasao no EM). "
+            "Este e o nivel de referencia que o sistema deve recuperar e superar."
         )
-
-    if delta_total is not None:
-        if delta_total < -5:
-            st.success(
-                f"**Tendencia de longo prazo:** queda de {abs(delta_total):.1f} p.p. na evasao do EM "
-                f"entre {insights.get('ano_ini_em')} e {insights.get('ano_fim_em')}. "
-                "As politicas educacionais produziram avancos reais ao longo dos anos."
-            )
-        elif delta_total > 2:
-            st.warning(
-                f"**Tendencia preocupante:** aumento de {delta_total:.1f} p.p. na evasao do EM "
-                f"entre {insights.get('ano_ini_em')} e {insights.get('ano_fim_em')}."
-            )
 
     st.divider()
 
-    # ── KPIs ──────────────────────────────────────────────────────────────────
-    secao(f"Indicadores do ano de referencia: {int(ultimo['ano'])}",
-          "p.p. = ponto percentual. Seta vermelha = piora. Seta verde = melhora.")
+    # ── KPIs principais ───────────────────────────────────────────────────────
+    st.markdown("### Numeros do ano mais recente disponivel")
+    st.caption(
+        f"Dados de {int(ultimo['ano'])}. "
+        "p.p. = ponto percentual (diferenca direta entre dois percentuais). "
+        "A seta mostra a variacao em relacao ao ano anterior: "
+        "para evasao e abandono, seta vermelha (para cima) significa piora."
+    )
 
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
-        st.metric("Evasao EF (%)", f"{sv('taxa_evasao_ef'):.1f}%" if pd.notna(sv('taxa_evasao_ef')) else "–",
+        st.metric("Evasao — Ensino Fundamental",
+                  f"{sv('taxa_evasao_ef'):.1f}%" if pd.notna(sv("taxa_evasao_ef")) else "–",
                   dpp("taxa_evasao_ef"), delta_color="inverse",
-                  help="Percentual de alunos do EF que abandonaram definitivamente o sistema escolar.")
+                  help="Percentual de alunos do EF que deixaram definitivamente o sistema escolar.")
     with c2:
-        st.metric("Evasao EM (%)", f"{sv('taxa_evasao_em'):.1f}%" if pd.notna(sv('taxa_evasao_em')) else "–",
+        st.metric("Evasao — Ensino Medio",
+                  f"{sv('taxa_evasao_em'):.1f}%" if pd.notna(sv("taxa_evasao_em")) else "–",
                   dpp("taxa_evasao_em"), delta_color="inverse",
-                  help="Evasao no Ensino Medio — historicamente 2 a 3 vezes maior que no EF.")
+                  help="Historicamente 2 a 3 vezes maior do que no EF.")
     with c3:
-        st.metric("Abandono EM (%)", f"{sv('taxa_abandono_em'):.1f}%" if pd.notna(sv('taxa_abandono_em')) else "–",
+        st.metric("Abandono — Ensino Medio",
+                  f"{sv('taxa_abandono_em'):.1f}%" if pd.notna(sv("taxa_abandono_em")) else "–",
                   dpp("taxa_abandono_em"), delta_color="inverse",
-                  help="Saidas durante o ano letivo — sinal mais imediato de evasao futura.")
+                  help="Saidas durante o ano letivo. Principal sinal de alerta da evasao futura.")
     with c4:
-        st.metric("TDI EM (%)", f"{sv('tdi_em'):.1f}%" if pd.notna(sv('tdi_em')) else "–",
+        st.metric("Distorcao Idade-Serie — EM (TDI)",
+                  f"{sv('tdi_em'):.1f}%" if pd.notna(sv("tdi_em")) else "–",
                   dpp("tdi_em"), delta_color="inverse",
-                  help="TDI = Distorcao Idade-Serie. Alunos cursando serie muito abaixo da esperada para sua idade.")
+                  help="TDI: alunos cursando serie muito abaixo do esperado para sua idade.")
     with c5:
-        st.metric("Score de Risco (0–100)", f"{sc:.0f}",
-                  f"{delta_sc:+.1f} vs. {int(ant['ano'])}" if delta_sc != 0 else None,
+        cor_sc = "inverse" if delta > 0 else "normal"
+        st.metric("Score de Risco (0–100)",
+                  f"{sc:.0f}",
+                  f"{delta:+.0f} vs. {int(ant['ano'])}" if delta else None,
                   delta_color="inverse",
-                  help="Score composto: quanto maior, maior o risco de evasao.")
+                  help="Score composto: Abandono EM (40%) + TDI (30%) + Reprovacao EM (30%).")
+
+    # Interpretação dos KPIs
+    ev_em = sv("taxa_evasao_em") or 0
+    ab_em = sv("taxa_abandono_em") or 0
+    tdi   = sv("tdi_em") or 0
+
+    if ev_em > 10:
+        pos_grafico(
+            f"A evasao no Ensino Medio esta em {ev_em:.1f}% — acima de 10%, o que significa "
+            "que mais de 1 em cada 10 alunos deixa definitivamente o sistema. Nivel critico.",
+            "critico",
+        )
+    elif ev_em > 5:
+        pos_grafico(
+            f"A evasao no Ensino Medio esta em {ev_em:.1f}%. "
+            "Acima de 5%, o que indica que o sistema ainda nao consegue manter todos os alunos.",
+            "atencao",
+        )
+    else:
+        pos_grafico(
+            f"A evasao no Ensino Medio esta em {ev_em:.1f}%, dentro do limite aceitavel (5%). "
+            "Isso nao significa ausencia de risco — o abandono e o TDI ainda precisam de atencao.",
+            "positivo",
+        )
 
     st.divider()
 
-    # ── Gauge + Evolucao do score ──────────────────────────────────────────────
-    col1, col2 = st.columns([1, 2])
+    # ── Score de risco: gauge ──────────────────────────────────────────────────
+    pre_grafico(
+        "Qual e o nivel de risco atual?",
+        f"O Score de Risco resume a situacao em um unico numero. Atualmente: {sc:.0f}/100 ({nivel}).",
+        "O Score combina tres fatores: abandono escolar (peso 40%), distorcao idade-serie/TDI (peso 30%) "
+        "e reprovacao (peso 30%). Quanto maior o numero, mais grave a situacao. "
+        "Verde = sob controle | Amarelo = atencao | Vermelho = situacao critica.",
+    )
 
-    with col1:
-        secao("Nivel de risco atual", "Verde = baixo | Amarelo = moderado | Vermelho = alto/critico")
+    col_g, col_t = st.columns([1, 2])
+    with col_g:
         if pd.notna(sc):
             fig_g = go.Figure(go.Indicator(
                 mode="gauge+number+delta",
                 value=float(sc),
-                delta={"reference": insights.get("score_ant", sc), "valueformat": ".0f",
-                       "increasing": {"color": COR_CRITICO}, "decreasing": {"color": COR_OK}},
-                number={"suffix": " / 100", "font": {"size": 24}},
+                delta={
+                    "reference": ins.get("score_ant", sc), "valueformat": ".0f",
+                    "increasing": {"color": "#DC2626"}, "decreasing": {"color": "#15803D"},
+                },
+                number={"suffix": " / 100", "font": {"size": 26}},
                 gauge={
                     "axis": {"range": [0, 100]},
                     "bar": {"color": CORES_RISCO.get(nivel, COR_CINZA)},
                     "steps": [
-                        {"range": [0, 20],  "color": "#DCFCE7"},
-                        {"range": [20, 35], "color": "#FEF9C3"},
-                        {"range": [35, 50], "color": "#FEE2E2"},
-                        {"range": [50, 100],"color": "#FECACA"},
+                        {"range": [0,  20],  "color": "#DCFCE7"},
+                        {"range": [20, 35],  "color": "#FEF9C3"},
+                        {"range": [35, 50],  "color": "#FEE2E2"},
+                        {"range": [50, 100], "color": "#FECACA"},
                     ],
                 },
                 title={"text": nivel, "font": {"size": 14}},
             ))
-            fig_g.update_layout(height=250, margin=dict(t=40, b=0, l=20, r=20))
+            fig_g.update_layout(height=240, margin=dict(t=40, b=0, l=10, r=10))
             st.plotly_chart(fig_g, use_container_width=True)
 
-    with col2:
-        secao("Como o risco evoluiu ao longo dos anos?")
+    with col_t:
         if "indice_risco_evasao" in df.columns:
             dt = df.dropna(subset=["indice_risco_evasao"])
             if not dt.empty:
                 fig_t = go.Figure()
-                for y0, y1, cor_f, lb in [(0,20,"#DCFCE7","Baixo"),(20,35,"#FEF9C3","Moderado"),(35,50,"#FEE2E2","Alto"),(50,100,"#FECACA","Critico")]:
-                    fig_t.add_hrect(y0=y0, y1=y1, fillcolor=cor_f, opacity=0.25, line_width=0,
-                                    annotation_text=lb, annotation_position="right")
+                for y0, y1, cf, lb in [
+                    (0, 20, "#DCFCE7", "Baixo"), (20, 35, "#FEF9C3", "Moderado"),
+                    (35, 50, "#FEE2E2", "Alto"), (50, 100, "#FECACA", "Critico"),
+                ]:
+                    fig_t.add_hrect(y0=y0, y1=y1, fillcolor=cf, opacity=0.25,
+                                    line_width=0, annotation_text=lb, annotation_position="right")
                 fig_t.add_trace(go.Scatter(
                     x=dt["ano"], y=dt["indice_risco_evasao"],
                     mode="lines+markers+text",
-                    text=dt["indice_risco_evasao"].round(0).astype(int),
+                    text=dt["indice_risco_evasao"].round(0).fillna(0).astype(int),
                     textposition="top center",
                     line=dict(color=COR_PRIMARIA, width=3),
                     marker=dict(size=9, color=dt["indice_risco_evasao"],
                                 colorscale="RdYlGn_r", cmin=0, cmax=60,
                                 line=dict(color="white", width=2)),
                 ))
-                pandemia_vrect(fig_t, a1, a2)
-                fig_t.update_layout(yaxis_title="Score (0–100)", xaxis_title="Ano",
-                                    hovermode="x unified", height=250, showlegend=False,
-                                    margin=dict(t=10, b=10))
+                vrect_pandemia(fig_t, a1, a2)
+                fig_t.update_layout(
+                    yaxis_title="Score de Risco (0–100)", xaxis_title="Ano",
+                    hovermode="x unified", height=240, showlegend=False,
+                    margin=dict(t=10, b=30),
+                )
                 st.plotly_chart(fig_t, use_container_width=True)
-                bloco_insight("info", "O que este grafico mostra",
-                    "Cada ponto e um ano. Pontos mais altos = maior risco. "
-                    "A queda consistente antes de 2020 mostra que as politicas educacionais funcionaram. "
-                    "O aumento durante a pandemia foi um choque externo — nao uma falha estrutural do sistema.")
+
+    delta_sc_txt = f"subiu {delta:+.0f} pontos" if delta > 0 else f"caiu {abs(delta):.0f} pontos"
+    pos_grafico(
+        f"O Score de Risco {delta_sc_txt} em relacao ao ano anterior. "
+        f"No grafico de linha, cada ponto e um ano. Pontos altos indicam maior risco. "
+        f"A queda consistente antes de 2020 mostra que as politicas educacionais funcionaram. "
+        f"O salto durante a pandemia foi um choque externo — nao uma falha estrutural.",
+        "atencao" if sc > LIMIARES["moderado"] else "positivo",
+    )
 
     st.divider()
 
-    # ── Comparação início vs fim do período ────────────────────────────────────
-    secao("Quanto os indicadores mudaram no periodo selecionado?",
-          f"Comparacao entre {int(df.iloc[0]['ano'])} e {int(ultimo['ano'])}.")
-
-    indicadores_comp = [
-        ("taxa_evasao_em",     "Evasao EM",     True),
-        ("taxa_abandono_em",   "Abandono EM",   True),
-        ("tdi_em",             "TDI EM",        True),
-        ("taxa_repetencia_em", "Reprovacao EM", True),
-        ("taxa_aprovacao_em",  "Aprovacao EM",  False),
-    ]
+    # ── Variação início vs fim do período ─────────────────────────────────────
+    st.markdown("### Quanto cada indicador mudou no periodo selecionado?")
+    st.write(
+        f"Comparacao entre {int(df.iloc[0]['ano'])} (inicio do periodo) e "
+        f"{int(df.iloc[-1]['ano'])} (ultimo ano disponivel). "
+        "p.p. = ponto percentual."
+    )
     primeiro = df.iloc[0]
-    colunas = st.columns(len(indicadores_comp))
-    for col_ui, (nome, label, inv) in zip(colunas, indicadores_comp):
-        v_ini = float(primeiro.get(nome, np.nan) or np.nan)
-        v_fim = float(ultimo.get(nome, np.nan) or np.nan)
-        if pd.notna(v_ini) and pd.notna(v_fim):
-            with col_ui:
-                st.metric(label, f"{v_fim:.1f}%",
-                          f"{v_fim-v_ini:+.1f} p.p.",
+    indicadores = [
+        ("taxa_evasao_em",     "Evasao EM",      True),
+        ("taxa_abandono_em",   "Abandono EM",     True),
+        ("tdi_em",             "TDI — EM",        True),
+        ("taxa_repetencia_em", "Reprovacao EM",   True),
+        ("taxa_aprovacao_em",  "Aprovacao EM",    False),
+    ]
+    colunas = st.columns(len(indicadores))
+    melhorias = 0
+    for ci, (nome, label, inv) in zip(colunas, indicadores):
+        vi = float(primeiro.get(nome, np.nan) or np.nan)
+        vf = float(ultimo.get(nome, np.nan) or np.nan)
+        if pd.notna(vi) and pd.notna(vf):
+            delta_i = vf - vi
+            if (inv and delta_i < 0) or (not inv and delta_i > 0):
+                melhorias += 1
+            with ci:
+                st.metric(label, f"{vf:.1f}%",
+                          f"{delta_i:+.1f} p.p.",
                           delta_color="inverse" if inv else "normal")
 
-    melhoras = sum(1 for nome, _, inv in indicadores_comp
-                   if pd.notna(float(primeiro.get(nome, np.nan) or np.nan))
-                   and pd.notna(float(ultimo.get(nome, np.nan) or np.nan))
-                   and ((inv and float(ultimo.get(nome,0) or 0) < float(primeiro.get(nome,0) or 0))
-                        or (not inv and float(ultimo.get(nome,0) or 0) > float(primeiro.get(nome,0) or 0))))
-    total_comp = sum(1 for nome, _, _ in indicadores_comp
-                     if pd.notna(float(primeiro.get(nome, np.nan) or np.nan)))
+    total_comp = sum(1 for nome, _, _ in indicadores
+                     if pd.notna(float(primeiro.get(nome, np.nan) or np.nan))
+                     and pd.notna(float(ultimo.get(nome, np.nan) or np.nan)))
     if total_comp > 0:
-        if melhoras == total_comp:
-            st.success(f"Todos os {total_comp} indicadores melhoraram no periodo {int(df.iloc[0]['ano'])}–{int(ultimo['ano'])}.")
-        elif melhoras > total_comp // 2:
-            st.info(f"{melhoras} de {total_comp} indicadores melhoraram no periodo.")
+        if melhorias == total_comp:
+            pos_grafico("Todos os indicadores melhoraram no periodo analisado.", "positivo")
+        elif melhorias >= total_comp // 2:
+            pos_grafico(
+                f"{melhorias} de {total_comp} indicadores melhoraram. "
+                "O periodo teve mais avanco do que retrocesso.",
+                "positivo",
+            )
         else:
-            st.warning(f"Apenas {melhoras} de {total_comp} indicadores melhoraram. O periodo foi de deterioracao.")
+            pos_grafico(
+                f"Apenas {melhorias} de {total_comp} indicadores melhoraram. "
+                "O periodo foi de deterioracao geral — provavelmente influenciado pela pandemia.",
+                "atencao",
+            )
 
-    transicao_pagina(
-        "Para entender como esses numeros evoluiram ano a ano, acesse 'Evolucao Historica'. "
-        "Para saber quais anos e periodos concentram maior risco, acesse 'Identificacao de Risco'."
-    )
-
-
-# ===========================================================================
-# PÁGINA 2 — EVOLUÇÃO HISTÓRICA: "Como o problema mudou ao longo do tempo?"
-# ===========================================================================
-def pagina_evolucao(dados: dict, filtros: dict, insights: dict):
-    st.markdown("# Evolucao Historica — Como o problema mudou ao longo do tempo?")
     st.caption(
-        "Analise a trajetoria da evasao ao longo dos anos. "
-        "Entenda quando melhorou, quando piorou e por que."
+        "Proxima secao: 'Evolucao ao Longo do Tempo' — veja como cada indicador se comportou "
+        "ano a ano e identifique os momentos de melhora e piora."
     )
 
-    a1, a2 = filtros["ano_range"]
-    df_int  = dados["fato_integrado"].copy()
-    df_int  = df_int[(df_int["ano"] >= a1) & (df_int["ano"] <= a2)]
-    df_educ = dados["dim_educ_anual"].copy()
-    df_educ = df_educ[(df_educ["ano"] >= a1) & (df_educ["ano"] <= a2)]
-    df_soc  = dados["dim_socio_anual"].copy()
-    df_soc  = df_soc[(df_soc["ano"] >= a1) & (df_soc["ano"] <= a2)]
-    tend    = dados["tendencia_anual"].copy()
-    tend    = tend[(tend["ano"] >= a1) & (tend["ano"] <= a2)]
 
-    show_ef = "Ensino Fundamental (EF)" in filtros["nivel"]
-    show_em = "Ensino Medio (EM)"        in filtros["nivel"]
+# ===========================================================================
+# PAGINA 2 — EVOLUÇÃO TEMPORAL
+# ===========================================================================
+def pagina_evolucao(dados: dict, filtros: dict, ins: dict):
+    st.markdown("# Evolucao da Evasao ao Longo do Tempo")
+    st.write(
+        "Esta secao mostra como a evasao e o abandono escolar evoluiram ano a ano. "
+        "Entender essa trajetoria e essencial para separar problemas estruturais "
+        "(que existem independente de crises) de choques externos (como a pandemia)."
+    )
 
-    # ── Narrativa histórica condensada ────────────────────────────────────────
-    if a1 <= 2022 and a2 >= 2019:
-        col_a, col_b, col_c, col_d = st.columns(4)
-        with col_a:
-            st.info("**2008–2019**\nQueda consistente. Expansão do acesso à escola e programas sociais funcionaram.")
-        with col_b:
-            st.warning("**2020**\nPandemia interrompeu o progresso. Fechamento das escolas, ensino remoto desigual e crise econômica.")
-        with col_c:
-            st.error("**2021**\nPico da crise. Efeitos acumulados de 2020 + alunos que não retornaram + subnotificação anterior.")
-        with col_d:
-            st.success("**2022 em diante**\nRetorno gradual. Recuperação lenta — o sistema nao volta ao nivel pre-pandemia rapidamente.")
-        st.divider()
+    a1, a2    = filtros["ano_range"]
+    df_soc    = dados["dim_socio_anual"].copy()
+    df_educ   = dados["dim_educ_anual"].copy()
+    df_int    = dados["fato_integrado"].copy()
+    tend      = dados["tendencia_anual"].copy()
+    show_ef   = "Ensino Fundamental (EF)" in filtros["nivel"]
+    show_em   = "Ensino Medio (EM)"        in filtros["nivel"]
 
-    # ── Gráfico principal ──────────────────────────────────────────────────────
-    secao("A evasao e o abandono aumentaram ou diminuiram?",
-          "Linha solida = evasao definitiva. Linha pontilhada = abandono no ano letivo. Azul = EF. Vermelho = EM.")
+    for d in [df_soc, df_educ, df_int, tend]:
+        d.drop(d[~d["ano"].between(a1, a2)].index, inplace=True)
+
+    if df_soc.empty:
+        st.warning("Dados insuficientes para este periodo. Amplie o intervalo de anos.")
+        return
+
+    # ── Serie temporal principal ───────────────────────────────────────────────
+    pre_grafico(
+        "Como a evasao e o abandono evoluiram ano a ano?",
+        "A evasao no Ensino Medio caiu consistentemente de 2008 a 2019, foi interrompida "
+        "pela pandemia em 2020–2021, e iniciou recuperacao em 2022.",
+        "Linhas solidas representam evasao (saida definitiva). "
+        "Linhas pontilhadas representam abandono (saida durante o ano). "
+        "Azul = Ensino Fundamental | Vermelho = Ensino Medio. "
+        "A area amarela marca o periodo da pandemia de COVID-19 (2020–2022).",
+    )
 
     fig = go.Figure()
-    pandemia_vrect(fig, a1, a2)
+    vrect_pandemia(fig, a1, a2)
     for nivel, show, c_ev, c_ab, nome in [
-        ("ef", show_ef, COR_EF, "#93C5FD", "EF"),
-        ("em", show_em, COR_EM, "#FCA5A5", "EM"),
+        ("ef", show_ef, COR_EF,      "#93C5FD", "EF"),
+        ("em", show_em, COR_EM,      "#FCA5A5", "EM"),
     ]:
-        if not show: continue
+        if not show:
+            continue
         s_s = df_soc.dropna(subset=[f"taxa_evasao_{nivel}"])
         s_e = df_educ.dropna(subset=[f"taxa_abandono_{nivel}"])
         if not s_s.empty:
-            fig.add_trace(go.Scatter(x=s_s["ano"], y=s_s[f"taxa_evasao_{nivel}"],
+            fig.add_trace(go.Scatter(
+                x=s_s["ano"], y=s_s[f"taxa_evasao_{nivel}"],
                 name=f"Evasao {nome}", mode="lines+markers",
-                line=dict(color=c_ev, width=3), marker=dict(size=8)))
+                line=dict(color=c_ev, width=3), marker=dict(size=8),
+            ))
         if not s_e.empty:
-            fig.add_trace(go.Scatter(x=s_e["ano"], y=s_e[f"taxa_abandono_{nivel}"],
+            fig.add_trace(go.Scatter(
+                x=s_e["ano"], y=s_e[f"taxa_abandono_{nivel}"],
                 name=f"Abandono {nome}", mode="lines+markers",
-                line=dict(color=c_ab, width=2, dash="dot"), marker=dict(size=7)))
-    fig.update_layout(yaxis_title="Taxa (%)", xaxis_title="Ano",
-                      hovermode="x unified", height=380,
-                      legend=dict(orientation="h", y=-0.22))
+                line=dict(color=c_ab, width=2, dash="dot"), marker=dict(size=7),
+            ))
+    fig.update_layout(
+        yaxis_title="Taxa (%)", xaxis_title="Ano",
+        hovermode="x unified", height=400,
+        legend=dict(orientation="h", y=-0.22),
+    )
     st.plotly_chart(fig, use_container_width=True)
 
-    # Insight automático
+    # Interpretação automática
     if "taxa_evasao_em" in df_soc.columns:
         s_em = df_soc.dropna(subset=["taxa_evasao_em"]).sort_values("ano")
         if len(s_em) >= 2:
-            v_ini, v_fim = s_em.iloc[0]["taxa_evasao_em"], s_em.iloc[-1]["taxa_evasao_em"]
-            delta = round(v_fim - v_ini, 1)
+            vi, vf = s_em.iloc[0]["taxa_evasao_em"], s_em.iloc[-1]["taxa_evasao_em"]
+            delta = round(vf - vi, 1)
             pico_ano = int(s_em.loc[s_em["taxa_evasao_em"].idxmax(), "ano"])
             pico_val = round(s_em["taxa_evasao_em"].max(), 1)
-            if delta < 0:
-                bloco_insight("bom", "Tendencia positiva no periodo",
-                    f"A evasao no EM caiu {abs(delta)} p.p. no periodo analisado "
-                    f"(de {v_ini:.1f}% para {v_fim:.1f}%). "
-                    f"O pico foi em {pico_ano} ({pico_val}%), "
-                    f"{'durante a pandemia — um choque externo, nao uma falha estrutural.' if 2020 <= pico_ano <= 2022 else 'marcado por condicoes adversas.'} "
-                    "Acao recomendada: mantenha as politicas que geraram a queda e monitore os anos recentes.")
-            else:
-                bloco_insight("ruim", "Atencao: piora no periodo",
-                    f"A evasao no EM subiu {delta} p.p. no periodo analisado. "
-                    "Acao recomendada: identifique os anos de maior crescimento e investigue suas causas.")
+            contexto_pico = (
+                "O pico coincide com a pandemia de COVID-19. "
+                "Em 2020, as escolas fecharam; em 2021, os efeitos acumulados geraram o maior nivel de evasao da serie. "
+                "Esse valor nao e um erro — e o reflexo real de uma crise sem precedentes."
+                if 2020 <= pico_ano <= 2022
+                else f"O pico em {pico_ano} pode estar relacionado a fatores locais ou nacionais daquele periodo."
+            )
+            pos_grafico(
+                f"No periodo analisado, a evasao no Ensino Medio {('caiu' if delta < 0 else 'subiu')} "
+                f"{abs(delta):.1f} p.p. (pontos percentuais) "
+                f"— de {vi:.1f}% em {int(s_em.iloc[0]['ano'])} para {vf:.1f}% em {int(s_em.iloc[-1]['ano'])}. "
+                f"O pico mais alto foi em {pico_ano} ({pico_val}%). {contexto_pico}",
+                "positivo" if delta < 0 else "atencao",
+            )
 
     st.divider()
 
-    # ── Variação YoY ──────────────────────────────────────────────────────────
-    secao("Em quais anos a evasao piorou ou melhorou?",
-          "Barra vermelha = evasao subiu em relacao ao ano anterior. Barra verde = evasao caiu.")
+    # ── Variação ano a ano ──────────────────────────────────────────────────────
+    pre_grafico(
+        "Em quais anos a evasao piorou e em quais melhorou?",
+        f"O maior aumento foi em {ins.get('pior_ano_var', '?')} "
+        f"(+{ins.get('pior_val_var', '?')}%). "
+        f"A maior queda foi em {ins.get('melhor_ano_var', '?')} "
+        f"({ins.get('melhor_val_var', '?')}%).",
+        "Cada barra mostra a variacao da evasao no Ensino Medio em relacao ao ano anterior. "
+        "Barras vermelhas (acima da linha zero) = evasao piorou. "
+        "Barras verdes (abaixo da linha zero) = evasao melhorou. "
+        "A variacao e sempre comparada ao ano imediatamente anterior.",
+    )
 
     if "var_taxa_evasao_em" in tend.columns:
         s = tend.dropna(subset=["var_taxa_evasao_em"])
         if not s.empty:
-            pior = s.loc[s["var_taxa_evasao_em"].idxmax()]
-            melhor = s.loc[s["var_taxa_evasao_em"].idxmin()]
+            pior_v  = s.loc[s["var_taxa_evasao_em"].idxmax()]
+            melhor_v = s.loc[s["var_taxa_evasao_em"].idxmin()]
             fig_y = go.Figure(go.Bar(
-                x=s["ano"], y=s["var_taxa_evasao_em"],
+                x=s["ano"],
+                y=s["var_taxa_evasao_em"],
                 marker_color=[COR_EM if v > 0 else COR_OK for v in s["var_taxa_evasao_em"]],
                 text=s["var_taxa_evasao_em"].apply(lambda x: f"{x:+.1f}%"),
                 textposition="outside",
             ))
             fig_y.add_hline(y=0, line_color=COR_CINZA, line_width=1.5)
-            fig_y.add_annotation(x=int(pior["ano"]), y=float(pior["var_taxa_evasao_em"]),
-                text=f"Maior piora: {int(pior['ano'])}", showarrow=True, arrowhead=2,
-                ax=0, ay=-30, font=dict(color=COR_EM, size=10))
-            fig_y.add_annotation(x=int(melhor["ano"]), y=float(melhor["var_taxa_evasao_em"]),
-                text=f"Maior melhora: {int(melhor['ano'])}", showarrow=True, arrowhead=2,
-                ax=0, ay=30, font=dict(color=COR_OK, size=10))
-            fig_y.update_layout(yaxis_title="Variacao vs. ano anterior (%)",
-                                xaxis_title="Ano", height=340)
+            fig_y.add_annotation(
+                x=int(pior_v["ano"]), y=float(pior_v["var_taxa_evasao_em"]),
+                text=f"Pior: {int(pior_v['ano'])}", showarrow=True, arrowhead=2,
+                ax=0, ay=-32, font=dict(color=COR_EM, size=10))
+            fig_y.add_annotation(
+                x=int(melhor_v["ano"]), y=float(melhor_v["var_taxa_evasao_em"]),
+                text=f"Melhor: {int(melhor_v['ano'])}", showarrow=True, arrowhead=2,
+                ax=0, ay=28, font=dict(color=COR_OK, size=10))
+            fig_y.update_layout(
+                yaxis_title="Variacao vs. ano anterior (%)", xaxis_title="Ano", height=360,
+            )
             st.plotly_chart(fig_y, use_container_width=True)
 
-            pior_pandemia = 2020 <= int(pior["ano"]) <= 2022
-            if pior_pandemia:
-                bloco_insight("info", f"Por que {int(pior['ano'])} foi o pior ano",
-                    f"O aumento de {float(pior['var_taxa_evasao_em']):.1f}% em {int(pior['ano'])} "
-                    "foi causado pela pandemia de COVID-19: fechamento das escolas, desigualdade no acesso ao ensino remoto "
-                    "e crise economica que levou jovens ao mercado de trabalho. "
-                    "Nao foi uma falha do sistema educacional — foi um choque externo de larga escala.")
-            else:
-                bloco_insight("info", f"Pior ano: {int(pior['ano'])}",
-                    f"A evasao subiu {float(pior['var_taxa_evasao_em']):.1f}% em relacao ao ano anterior. "
-                    "Investigue se houve mudancas de politica, cortes de orcamento ou fatores externos nesse ano.")
+            pior_pandemia = 2020 <= int(pior_v["ano"]) <= 2022
+            pos_grafico(
+                f"O maior aumento na evasao ocorreu em {int(pior_v['ano'])} "
+                f"(+{float(pior_v['var_taxa_evasao_em']):.1f}% em relacao ao ano anterior). "
+                + (
+                    "Esse foi o auge do impacto da pandemia: fechamento das escolas, ensino remoto desigual "
+                    "(muitos alunos sem internet ou dispositivos) e crise economica que levou jovens ao mercado de trabalho. "
+                    "Estima-se que cerca de 4 milhoes de estudantes brasileiros deixaram de estudar em 2020–2021."
+                    if pior_pandemia
+                    else f"Investigue o que ocorreu em {int(pior_v['ano'])} — mudancas de politica, contexto economico."
+                ),
+                "atencao",
+            )
         else:
-            st.warning("Dados insuficientes para calcular variacao anual. Amplie o periodo de analise.")
+            st.warning("Dados insuficientes para calcular variacao anual. Amplie o periodo.")
 
     st.divider()
 
-    # ── EF vs EM ──────────────────────────────────────────────────────────────
-    secao("O Ensino Medio e mais critico que o Ensino Fundamental?",
-          "Barras = evasao por nivel de ensino. Linha pontilhada = quantas vezes o EM e maior que o EF.")
+    # ── EF vs EM ───────────────────────────────────────────────────────────────
+    pre_grafico(
+        "O Ensino Medio e realmente mais afetado do que o Ensino Fundamental?",
+        "Sim. Historicamente, a evasao no Ensino Medio e 2 a 3 vezes maior do que no Ensino Fundamental.",
+        "As barras mostram a evasao nos dois niveis de ensino. "
+        "A linha pontilhada mostra quantas vezes a evasao do EM supera a do EF em cada ano. "
+        "Esse dado e importante: as politicas para os dois niveis precisam ser diferentes.",
+    )
 
     if all(c in df_int.columns for c in ["taxa_evasao_ef", "taxa_evasao_em"]):
         dc = df_int.dropna(subset=["taxa_evasao_ef", "taxa_evasao_em"]).sort_values("ano").copy()
@@ -628,499 +686,691 @@ def pagina_evolucao(dados: dict, filtros: dict, insights: dict):
         if not dc.empty:
             dc["razao"] = (dc["taxa_evasao_em"] / dc["taxa_evasao_ef"]).round(2)
             fig_c = make_subplots(specs=[[{"secondary_y": True}]])
-            fig_c.add_trace(go.Bar(x=dc["ano"], y=dc["taxa_evasao_ef"],
-                name="Evasao EF (%)", marker_color=COR_EF, opacity=0.85), secondary_y=False)
-            fig_c.add_trace(go.Bar(x=dc["ano"], y=dc["taxa_evasao_em"],
-                name="Evasao EM (%)", marker_color=COR_EM, opacity=0.85), secondary_y=False)
-            fig_c.add_trace(go.Scatter(x=dc["ano"], y=dc["razao"],
-                name="Razao EM / EF", mode="lines+markers",
-                line=dict(color=COR_PRIMARIA, width=2, dash="dot"),
-                marker=dict(size=7)), secondary_y=True)
-            fig_c.update_yaxes(title_text="Evasao (%)", secondary_y=False)
-            fig_c.update_yaxes(title_text="Razao EM / EF", secondary_y=True)
-            fig_c.update_layout(barmode="group", hovermode="x unified",
-                                height=360, legend=dict(orientation="h", y=-0.22))
+            fig_c.add_trace(
+                go.Bar(x=dc["ano"], y=dc["taxa_evasao_ef"],
+                       name="Evasao EF (%)", marker_color=COR_EF, opacity=0.85),
+                secondary_y=False,
+            )
+            fig_c.add_trace(
+                go.Bar(x=dc["ano"], y=dc["taxa_evasao_em"],
+                       name="Evasao EM (%)", marker_color=COR_EM, opacity=0.85),
+                secondary_y=False,
+            )
+            fig_c.add_trace(
+                go.Scatter(x=dc["ano"], y=dc["razao"], name="Vezes que EM supera EF",
+                           mode="lines+markers",
+                           line=dict(color=COR_PRIMARIA, width=2, dash="dot"),
+                           marker=dict(size=7)),
+                secondary_y=True,
+            )
+            fig_c.update_yaxes(title_text="Taxa de Evasao (%)", secondary_y=False)
+            fig_c.update_yaxes(title_text="EM e quantas vezes maior que EF", secondary_y=True)
+            fig_c.update_layout(
+                barmode="group", hovermode="x unified", height=380,
+                legend=dict(orientation="h", y=-0.22),
+            )
             st.plotly_chart(fig_c, use_container_width=True)
 
             mr = round(dc["razao"].mean(), 1)
-            bloco_insight("ruim", f"Sim: o EM tem em media {mr}x mais evasao que o EF",
-                "Isso ocorre por razoes estruturais: maior pressao para trabalhar, currículo percebido como distante "
-                "da realidade, e menor sensação de obrigatoriedade. Durante crises, o EM e sempre o primeiro afetado. "
-                "Acao: priorize o 1 ano do EM, onde a transicao do EF gera o maior risco de abandono.")
+            ano_max_r = int(dc.loc[dc["razao"].idxmax(), "ano"])
+            max_r     = round(dc["razao"].max(), 1)
+            pos_grafico(
+                f"Em media, a evasao no Ensino Medio foi {mr} vezes maior do que no Ensino Fundamental. "
+                f"O pico dessa diferenca ocorreu em {ano_max_r} ({max_r} vezes). "
+                "Por que o EM e mais vulneravel? Alunos entre 15 e 17 anos enfrentam maior pressao economica para trabalhar. "
+                "O curriculo do EM e percebido como mais distante da realidade. "
+                "Durante crises, o EM e sempre o primeiro atingido. "
+                "Isso significa que as politicas para o EM precisam ser mais intensas e especificas.",
+                "atencao",
+            )
 
     st.divider()
 
-    # ── Boxplot ────────────────────────────────────────────────────────────────
-    secao("Cada periodo historico foi melhor ou pior?",
-          "A caixa mostra onde estao a maioria dos valores. Pontos isolados = anos excepcionais (como a pandemia).")
-
-    st.info(
-        "**Como ler este grafico sem estatistica:** imagine os valores do periodo empilhados em ordem. "
-        "A caixa e o bloco do meio — 50% dos registros ficam dentro dela. "
-        "A linha no centro da caixa e o valor mais tipico. "
-        "Pontos acima da caixa = anos com valores muito acima do normal. No caso da pandemia, isso e esperado."
+    # ── Boxplot por período ─────────────────────────────────────────────────────
+    pre_grafico(
+        "Cada fase historica foi melhor ou pior?",
+        "O periodo 2016–2019 foi o melhor da serie. A pandemia (2020–2022) foi o pior periodo registrado.",
+        "O grafico de caixas agrupa os dados em fases historicas. "
+        "Como interpretar: a linha no centro da caixa e o valor mais tipico de cada periodo. "
+        "A caixa engloba 50% dos registros. Pontos isolados sao anos com valores excepcionais. "
+        "Isso e esperado para 2020–2021: a pandemia gerou valores fora do padrao — e isso nao e erro de dados.",
     )
 
     col1, col2 = st.columns(2)
     for col_ui, base, col_v, titulo_g in [
-        (col1, dados["fato_socioeconomico"], "taxa_evasao_em",   "Evasao EM por periodo (%)"),
-        (col2, dados["fato_educacional"],    "taxa_abandono_em", "Abandono EM por periodo (%)"),
+        (col1, dados["fato_socioeconomico"], "taxa_evasao_em",   "Evasao no Ensino Medio por periodo (%)"),
+        (col2, dados["fato_educacional"],    "taxa_abandono_em", "Abandono no Ensino Medio por periodo (%)"),
     ]:
         with col_ui:
             s = base.dropna(subset=[col_v])
-            s = s[(s["ano"] >= a1) & (s["ano"] <= a2)]
-            if s.empty: continue
+            s = s[s["ano"].between(a1, a2)]
+            if s.empty:
+                continue
             ordem = ["2006–2010", "2011–2015", "2016–2019", "2020–2022 (Pandemia)", "2023–2024"]
             ok = [p for p in ordem if p in s["periodo"].unique()]
-            fig_b = px.box(s, x="periodo", y=col_v, category_orders={"periodo": ok},
+            fig_b = px.box(
+                s, x="periodo", y=col_v,
+                category_orders={"periodo": ok},
                 color="periodo", color_discrete_map=PALETA_PERIODO,
-                labels={"periodo": "Periodo", col_v: "%"}, points="all", title=titulo_g)
-            fig_b.update_layout(showlegend=False, height=380)
+                labels={"periodo": "Periodo historico", col_v: "Taxa (%)"},
+                points="all", title=titulo_g,
+            )
+            fig_b.update_layout(showlegend=False, height=400)
             st.plotly_chart(fig_b, use_container_width=True)
 
-    bloco_insight("info", "O que comparar",
-        "O periodo 2016–2019 (verde) representa o melhor desempenho pre-pandemia — use-o como meta. "
-        "O periodo 2020–2022 (amarelo) concentra os valores mais altos — sao outliers causados pela pandemia, nao erros. "
-        "Acao: o objetivo atual e voltar ao nivel de 2016–2019 e ir alem.")
-
+    pos_grafico(
+        "O periodo 2016–2019 (verde) representa o melhor desempenho historico antes da pandemia — "
+        "e a meta de curto prazo para recuperacao. "
+        "O periodo 2020–2022 (amarelo) concentra os valores mais altos: sao valores extremos causados "
+        "pela pandemia, nao erros de medicao. "
+        "O objetivo atual e retornar ao nivel de 2016–2019 e supera-lo.",
+        "atencao",
+    )
     st.warning(
-        "Valores extremos nos graficos acima nao sao erros de dados. "
-        "Eles refletem o impacto real da pandemia — um evento sem precedentes que nao pode ser ignorado na analise."
+        "Limitacao dos dados: os valores extremos de 2020–2021 refletem o impacto real da pandemia, "
+        "mas tambem podem conter subnotificacao — em 2020, muitas escolas nao realizaram avaliacoes formais, "
+        "o que dificulta a comparacao direta com outros anos."
     )
 
-    transicao_pagina(
-        "Para identificar quais anos e registros concentram maior risco, acesse 'Identificacao de Risco'. "
-        "Para entender as causas desses padroes, acesse 'Por que ocorre?'."
-    )
-
-
-# ===========================================================================
-# PÁGINA 3 — IDENTIFICAÇÃO DE RISCO: "Onde e quem está em risco?"
-# ===========================================================================
-def pagina_risco(dados: dict, filtros: dict, insights: dict):
-    st.markdown("# Identificacao de Risco — Onde e quem esta em risco?")
     st.caption(
-        "Use esta pagina para priorizar: quais anos e registros escolares concentram maior risco. "
-        "O Score de Risco combina tres indicadores em um unico numero (0 a 100)."
+        "Proxima secao: 'Impacto da Pandemia' — analise especifica do periodo 2020–2022 "
+        "e suas consequencias nos indicadores educacionais."
+    )
+
+
+# ===========================================================================
+# PAGINA 3 — IMPACTO DA PANDEMIA
+# ===========================================================================
+def pagina_pandemia(dados: dict, filtros: dict, ins: dict):
+    st.markdown("# O Impacto da Pandemia de COVID-19 na Evasao Escolar")
+    st.write(
+        "A pandemia de COVID-19 (2020–2022) foi o maior choque externo na educacao brasileira "
+        "das ultimas decadas. Esta secao analisa em detalhe o que aconteceu, por que aconteceu "
+        "e o que os dados nos dizem sobre o periodo de recuperacao."
     )
 
     a1, a2 = filtros["ano_range"]
-    df_educ = dados["fato_educacional"].copy()
-    df_educ = df_educ[(df_educ["ano"] >= a1) & (df_educ["ano"] <= a2)]
-    df_educ["score_risco"] = calcular_score(df_educ)
-    df_educ["nivel_risco"] = classificar_risco(df_educ["score_risco"])
 
-    total = len(df_educ)
-    n_alto = df_educ["nivel_risco"].isin(["Alto", "Critico"]).sum()
-    n_suficiente = total >= 3
-
-    if not n_suficiente:
-        st.warning("Dados insuficientes para conclusoes robustas. Amplie o periodo de analise.")
-
-    # Resumo automático
-    if n_alto == 0:
-        st.success(f"Nenhum registro em nivel Alto ou Critico no periodo {a1}–{a2}.")
-    elif n_alto / total >= 0.5:
-        st.error(
-            f"{n_alto} de {total} registros ({n_alto/total*100:.0f}%) estao em nivel Alto ou Critico. "
-            "Mais da metade dos registros do periodo exigem atencao."
-        )
-    else:
-        st.warning(
-            f"{n_alto} de {total} registros ({n_alto/total*100:.0f}%) estao em nivel Alto ou Critico."
-        )
-
-    st.divider()
-
-    # ── Distribuição + evolução score ──────────────────────────────────────────
-    col1, col2 = st.columns([1, 2])
-
-    with col1:
-        secao("Como os registros se distribuem por nivel de risco?")
-        contagem = df_educ["nivel_risco"].value_counts().reindex(
-            ["Critico", "Alto", "Moderado", "Baixo"], fill_value=0)
-        fig_pie = go.Figure(go.Pie(
-            labels=contagem.index.tolist(), values=contagem.values.tolist(),
-            marker_colors=[CORES_RISCO["Critico"], CORES_RISCO["Alto"], CORES_RISCO["Moderado"], CORES_RISCO["Baixo"]],
-            hole=0.5, textinfo="label+percent+value", textfont=dict(size=11),
-        ))
-        fig_pie.update_layout(height=300, showlegend=False,
-            annotations=[dict(text=f"{total}", x=0.5, y=0.5,
-                             font=dict(size=14, color="#1E3A5F"), showarrow=False)])
-        st.plotly_chart(fig_pie, use_container_width=True)
-        perc_crit = contagem.get("Critico", 0) + contagem.get("Alto", 0)
-        bloco_insight(
-            "ruim" if perc_crit / total >= 0.3 else "info",
-            "O que isso significa",
-            f"{perc_crit} registros em nivel Alto ou Critico. "
-            "Cada registro representa um conjunto de dados de um determinado ano. "
-            "Foco de acao: os registros mais vermelhos."
-        )
-
-    with col2:
-        secao("O score de risco subiu ou caiu?",
-              "Linha = media anual. Area sombreada = variacao entre minimo e maximo do ano.")
-        score_ano = df_educ.groupby("ano")["score_risco"].agg(["mean", "max", "min"]).reset_index()
-        score_ano.columns = ["ano", "medio", "maximo", "minimo"]
-
-        if not score_ano.empty:
-            fig_sc = go.Figure()
-            for y0, y1, cor_f in [(0,20,"#DCFCE7"),(20,35,"#FEF9C3"),(35,50,"#FEE2E2"),(50,100,"#FECACA")]:
-                fig_sc.add_hrect(y0=y0, y1=y1, fillcolor=cor_f, opacity=0.2, line_width=0)
-            fig_sc.add_trace(go.Scatter(
-                x=pd.concat([score_ano["ano"], score_ano["ano"][::-1]]),
-                y=pd.concat([score_ano["maximo"], score_ano["minimo"][::-1]]),
-                fill="toself", fillcolor=hex_rgba(COR_EM, 0.1),
-                line=dict(color="rgba(0,0,0,0)"), name="Variacao"))
-            fig_sc.add_trace(go.Scatter(
-                x=score_ano["ano"], y=score_ano["medio"],
-                mode="lines+markers", name="Score medio",
-                line=dict(color=COR_PRIMARIA, width=3),
-                marker=dict(size=9, color=score_ano["medio"],
-                            colorscale="RdYlGn_r", cmin=0, cmax=60,
-                            line=dict(color="white", width=2)),
-                text=score_ano["medio"].round(0).astype(int), textposition="top center",
-            ))
-            pandemia_vrect(fig_sc, a1, a2)
-            fig_sc.update_layout(yaxis_title="Score (0–100)", xaxis_title="Ano",
-                                 hovermode="x unified", height=300,
-                                 legend=dict(orientation="h", y=-0.2))
-            st.plotly_chart(fig_sc, use_container_width=True)
-
-            pior = score_ano.loc[score_ano["medio"].idxmax()]
-            melhor = score_ano.loc[score_ano["medio"].idxmin()]
-            bloco_insight("info", "Leitura rapida",
-                f"Pior: {int(pior['ano'])} (score medio de {pior['medio']:.0f}). "
-                f"Melhor: {int(melhor['ano'])} (score medio de {melhor['medio']:.0f}). "
-                "A area sombreada mostra a dispersao — quanto mais larga, maior a diferenca entre os extremos.")
-
-    st.divider()
-
-    # ── Ranking ────────────────────────────────────────────────────────────────
-    secao("Quais registros tem maior score de risco?",
-          "Ordenado do maior para o menor risco. Use o filtro 'Nivel de risco' na barra lateral.")
-
-    niveis_sel = filtros.get("risco_filtro", ["Alto", "Critico"])
-    df_rank = df_educ[df_educ["nivel_risco"].isin(niveis_sel)].copy() if niveis_sel else df_educ.copy()
-    df_rank = df_rank.sort_values("score_risco", ascending=False).reset_index(drop=True)
-    df_rank.index += 1
-
-    rename = {
-        "ano": "Ano", "nivel_risco": "Nivel", "score_risco": "Score (0–100)",
-        "taxa_abandono_em": "Abandono EM (%)", "tdi_em": "TDI EM (%)",
-        "taxa_reprovacao_em": "Reprovacao EM (%)", "atu_em": "Alunos/Turma EM",
-    }
-    cols_show = [c for c in rename if c in df_rank.columns]
-    df_display = df_rank[cols_show].rename(columns=rename)
-
-    if df_display.empty:
-        st.warning("Nenhum registro para os niveis selecionados. Altere o filtro 'Nivel de risco' na barra lateral.")
-    else:
-        st.dataframe(df_display, use_container_width=True, height=380,
-            column_config={"Score (0–100)": st.column_config.ProgressColumn(
-                "Score (0–100)", min_value=0, max_value=100, format="%.0f")})
-        st.caption(
-            "Score = Abandono EM (40%) + TDI — Distorcao Idade-Serie (30%) + Reprovacao EM (30%). "
-            "Quanto maior, maior o risco. Foque nos registros com Score acima de 35."
-        )
-
-    st.divider()
-
-    # ── Mapa de calor ──────────────────────────────────────────────────────────
-    secao("Em quais combinacoes de ano e nivel de risco se concentram os problemas?",
-          "Cada celula = numero de registros. Quanto mais escuro, maior a concentracao.")
-
-    pivot = df_educ.pivot_table(index="nivel_risco", columns="ano",
-        values="score_risco", aggfunc="count", fill_value=0
-    ).reindex(["Critico", "Alto", "Moderado", "Baixo"])
-
-    if not pivot.empty:
-        fig_h = px.imshow(pivot, color_continuous_scale=["#DCFCE7", "#FEF9C3", "#FEE2E2", "#991B1B"],
-            text_auto=True, labels={"color": "Registros"})
-        fig_h.update_layout(height=280, xaxis_title="Ano", yaxis_title="Nivel de Risco")
-        st.plotly_chart(fig_h, use_container_width=True)
-        bloco_insight("info", "Como usar este mapa",
-            "Colunas escuras = anos de maior risco. Linhas vermelhas = registros criticos. "
-            "Identifique colunas com muitas celulas vermelhas — esses sao os anos prioritarios para revisao de politicas.")
-
-    st.divider()
-
-    # ── Placeholder modelo preditivo ──────────────────────────────────────────
-    st.markdown("### [Em Desenvolvimento] — Modelo Preditivo de Risco")
-    st.info(
-        "**O que sera adicionado aqui:**\n\n"
-        "Esta secao esta sendo preparada para receber um modelo preditivo que vai identificar, "
-        "com base nos dados historicos:\n\n"
-        "- Probabilidade estimada de evasao nos proximos anos\n"
-        "- Grupos de alunos com maior vulnerabilidade\n"
-        "- Impacto simulado de intervencoes especificas\n\n"
-        "**Por enquanto**, o Score de Risco calculado manualmente (acima) serve como aproximacao. "
-        "Registros com Score acima de 35 sao os candidatos prioritarios para intervencao."
+    # ── Explicação dos 3 mecanismos ────────────────────────────────────────────
+    st.markdown("### Por que a pandemia afetou tanto a evasao?")
+    st.write(
+        "Tres mecanismos principais explicam o aumento abrupto da evasao durante a pandemia:"
     )
 
-    with st.expander("Ver simulacao simples de risco (baseada nos ultimos dados disponiveis)"):
-        df_sim = df_educ.sort_values("ano").groupby("ano")[["score_risco"]].mean().reset_index()
-        df_sim = df_sim.dropna()
-        if len(df_sim) >= 3:
-            z = np.polyfit(df_sim["ano"], df_sim["score_risco"], 1)
-            anos_proj = [df_sim["ano"].max() + 1, df_sim["ano"].max() + 2]
-            proj = [round(np.poly1d(z)(a), 1) for a in anos_proj]
-            df_proj = pd.DataFrame({"Ano": anos_proj, "Score projetado (simulacao linear)": proj,
-                                    "Nivel estimado": [classificar_risco(pd.Series([p])).iloc[0] for p in proj]})
-            st.dataframe(df_proj, use_container_width=True, hide_index=True)
-            st.caption(
-                "AVISO: esta e uma projecao simplificada baseada apenas na tendencia linear historica. "
-                "Nao considera fatores externos, politicas ou mudancas estruturais. "
-                "Use apenas como indicativo, nao como previsao."
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.error(
+            "**1. Fechamento das escolas**\n\n"
+            "A suspensao das aulas presenciais rompeu o vinculo fisico entre aluno e escola. "
+            "Muitos estudantes simplesmente pararam de acompanhar as atividades remotas. "
+            "Para alunos com dificuldades de aprendizagem, o ensino remoto foi ainda mais excluente."
+        )
+    with c2:
+        st.error(
+            "**2. Ensino remoto desigual**\n\n"
+            "Grande parte dos alunos da rede publica nao tinha acesso adequado a internet "
+            "ou dispositivos eletronicos. "
+            "Enquanto escolas particulares adaptaram rapidamente, alunos publicos ficaram para tras, "
+            "acumulando defasagens que aumentaram a chance de abandono."
+        )
+    with c3:
+        st.error(
+            "**3. Crise economica**\n\n"
+            "Familias perderam renda. Jovens passaram a trabalhar para complementar a renda familiar. "
+            "O trabalho informal e infantil aumentou. "
+            "Para muitos, entre estudar e garantir sustento da familia, a escola perdeu prioridade. "
+            "Estima-se que 4 milhoes de brasileiros deixaram de estudar em 2020."
+        )
+
+    st.divider()
+
+    # ── Score antes, durante e depois da pandemia ──────────────────────────────
+    df_fi = dados["fato_integrado"].copy().sort_values("ano")
+
+    pre_grafico(
+        "Como o risco de evasao se comportou antes, durante e apos a pandemia?",
+        "O risco subiu abruptamente em 2020–2021 e iniciou queda em 2022, "
+        "mas ainda nao voltou ao nivel pre-pandemia.",
+        "O Score de Risco combina abandono (40%), TDI/defasagem (30%) e reprovacao (30%). "
+        "Cada ano e marcado com seu nivel de risco (cor). "
+        "A comparacao entre periodos mostra o impacto do choque e a velocidade de recuperacao.",
+    )
+
+    if "indice_risco_evasao" in df_fi.columns:
+        dt = df_fi.dropna(subset=["indice_risco_evasao"])
+        fig_p = go.Figure()
+        for y0, y1, cf, lb in [
+            (0, 20, "#DCFCE7", "Baixo"), (20, 35, "#FEF9C3", "Moderado"),
+            (35, 50, "#FEE2E2", "Alto"), (50, 100, "#FECACA", "Critico"),
+        ]:
+            fig_p.add_hrect(y0=y0, y1=y1, fillcolor=cf, opacity=0.2, line_width=0,
+                            annotation_text=lb, annotation_position="right")
+        fig_p.add_trace(go.Scatter(
+            x=dt["ano"], y=dt["indice_risco_evasao"],
+            mode="lines+markers+text",
+            text=dt["indice_risco_evasao"].round(0).fillna(0).astype(int),
+            textposition="top center",
+            line=dict(color=COR_PRIMARIA, width=3),
+            marker=dict(
+                size=10,
+                color=dt["indice_risco_evasao"],
+                colorscale="RdYlGn_r", cmin=0, cmax=60,
+                line=dict(color="white", width=2),
+            ),
+        ))
+        fig_p.add_vrect(x0=2019.5, x1=2022.5, fillcolor="#FEF9C3", opacity=0.35,
+                        line_width=0, annotation_text="Pandemia",
+                        annotation_position="top left",
+                        annotation_font=dict(size=11, color="#92400E"))
+        fig_p.update_layout(yaxis_title="Score de Risco (0–100)", xaxis_title="Ano",
+                            hovermode="x unified", height=380, showlegend=False)
+        st.plotly_chart(fig_p, use_container_width=True)
+
+        # Calcula diferença pré e pós pandemia
+        pre  = dt[dt["ano"] < 2020]["indice_risco_evasao"].mean()
+        pan  = dt[dt["ano"].between(2020, 2022)]["indice_risco_evasao"].mean()
+        pos  = dt[dt["ano"] > 2022]["indice_risco_evasao"].mean()
+        if pd.notna(pre) and pd.notna(pan):
+            diff = round(pan - pre, 1)
+            pos_grafico(
+                f"O Score de Risco medio antes da pandemia era de {pre:.1f}. "
+                f"Durante a pandemia, subiu para {pan:.1f} — um aumento de {diff:.1f} pontos. "
+                + (
+                    f"Apos a pandemia (2022+), o score iniciou queda para {pos:.1f}, "
+                    "mas ainda nao retornou ao nivel anterior. "
+                    "A recuperacao e lenta porque os efeitos da pandemia sao de longo prazo: "
+                    "alunos que abandonaram raramente retornam imediatamente."
+                    if pd.notna(pos) else
+                    "Os dados disponiveis cobrem ate 2022, inicio da recuperacao."
+                ),
+                "atencao",
             )
 
-    transicao_pagina(
-        "Para entender por que esses riscos existem, acesse 'Por que ocorre?'. "
-        "Para saber o que fazer com essa informacao, acesse 'Plano de Acao'."
+    st.divider()
+
+    # ── Efeito nos indicadores individuais ─────────────────────────────────────
+    st.markdown("### O que aconteceu com cada indicador durante a pandemia?")
+    st.write(
+        "Abaixo, a comparacao dos indicadores individuais entre o melhor periodo pre-pandemia "
+        "(2016–2019) e o periodo da pandemia (2020–2022)."
     )
 
+    df_soc   = dados["dim_socio_anual"].copy()
+    df_educ_  = dados["dim_educ_anual"].copy()
+    df_fi_    = dados["fato_integrado"].copy()
 
-# ===========================================================================
-# PÁGINA 4 — POR QUE OCORRE: "Quais sao as causas?"
-# ===========================================================================
-def pagina_causas(dados: dict, filtros: dict, insights: dict):
-    st.markdown("# Por que ocorre? — Quais sao as causas da evasao?")
+    comparacoes = []
+    for col_v, label, fonte in [
+        ("taxa_evasao_em",   "Evasao EM (%)",   df_soc),
+        ("taxa_abandono_em", "Abandono EM (%)", df_educ_),
+        ("tdi_em",           "TDI EM (%)",       df_fi_),
+    ]:
+        if col_v not in fonte.columns:
+            continue
+        pre_p  = fonte[fonte["ano"].between(2016, 2019)][col_v].mean()
+        pan_p  = fonte[fonte["ano"].between(2020, 2022)][col_v].mean()
+        if pd.notna(pre_p) and pd.notna(pan_p):
+            comparacoes.append({
+                "Indicador": label,
+                "Media 2016–2019 (pre-pandemia)": f"{pre_p:.1f}%",
+                "Media 2020–2022 (pandemia)": f"{pan_p:.1f}%",
+                "Diferenca (p.p.)": f"{pan_p-pre_p:+.1f}",
+            })
+
+    if comparacoes:
+        df_comp = pd.DataFrame(comparacoes)
+        st.dataframe(df_comp, use_container_width=True, hide_index=True)
+        pos_grafico(
+            "Todos os indicadores pioraram durante a pandemia em relacao ao melhor periodo anterior. "
+            "A coluna 'Diferenca' mostra o impacto em pontos percentuais (p.p.). "
+            "Valores positivos indicam piora (mais evasao, mais abandono, mais defasagem). "
+            "Esse e o custo educacional da pandemia em Recife, mensuravel nos dados.",
+            "atencao",
+        )
+
+    st.divider()
+    st.markdown("### 2022 — Inicio da recuperacao ou ilusao?")
+    st.write(
+        "Em 2022, os indicadores comecaram a melhorar com o retorno as aulas presenciais. "
+        "Porem, a recuperacao e parcial e lenta. Tres razoes explicam por que:"
+    )
+    st.info(
+        "**1. Alunos que abandonaram nao retornam imediatamente.** "
+        "Uma vez fora do sistema, reintegrar alunos exige politicas ativas — nao apenas reabrir as escolas.\n\n"
+        "**2. Defasagens de aprendizagem persistem.** "
+        "Alunos que avancaram de serie durante a pandemia sem dominar o conteudo chegam ao ano seguinte "
+        "com lacunas que aumentam o risco de reprovacao e abandono futuro.\n\n"
+        "**3. Os efeitos economicos nao desaparecem com o fim das restricoes.** "
+        "Familias que perderam renda durante a pandemia continuam em situacao de vulnerabilidade, "
+        "e isso mantem a pressao para que jovens trabalhem em vez de estudar."
+    )
+
     st.caption(
-        "Entender as causas e fundamental para escolher as intervencoes certas. "
-        "Esta pagina mostra quais fatores estao mais associados a evasao — com dados."
+        "Proxima secao: 'Por que os Alunos Evadem?' — analise das relacoes entre "
+        "reprovacao, defasagem escolar e evasao."
     )
 
-    a1, a2 = filtros["ano_range"]
-    df_int   = dados["fato_integrado"].copy()
-    df_int   = df_int[(df_int["ano"] >= a1) & (df_int["ano"] <= a2)]
-    df_socio = dados["dim_socio_anual"].copy()
-    df_socio = df_socio[(df_socio["ano"] >= a1) & (df_socio["ano"] <= a2)]
+
+# ===========================================================================
+# PAGINA 4 — RELAÇÃO ENTRE VARIÁVEIS
+# ===========================================================================
+def pagina_relacoes(dados: dict, filtros: dict, ins: dict):
+    st.markdown("# Por que os Alunos Evadem? — Relacao entre as Variaveis")
+    st.write(
+        "Evasao raramente e uma decisao repentina. Ela e o resultado final de uma cadeia de eventos "
+        "que comeca com a reprovacao e se agrava com o acumulo de defasagem. "
+        "Esta secao mostra essa cadeia com dados — e explica quais variaveis sao os "
+        "melhores preditores da evasao."
+    )
+
+    a1, a2   = filtros["ano_range"]
+    df_socio = dados["dim_socio_anual"][(dados["dim_socio_anual"]["ano"].between(a1, a2))].copy()
+    df_int   = dados["fato_integrado"][(dados["fato_integrado"]["ano"].between(a1, a2))].copy()
 
     # ── Cadeia causal ──────────────────────────────────────────────────────────
+    st.markdown("### A cadeia que leva a evasao")
     st.markdown("""
-    <div style="background:#F8FAFC;border:1px solid #CBD5E1;padding:16px 20px;border-radius:6px;margin-bottom:16px">
-    <p style="color:#1E293B;font-weight:600;font-size:0.9rem;margin:0 0 10px 0">
-    A evasao nao acontece de repente — ela segue uma cadeia de causas previsivel:
-    </p>
-    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:0.85rem;margin-bottom:12px">
-    <div style="background:#FEE2E2;color:#991B1B;padding:6px 12px;border-radius:4px;font-weight:600;text-align:center">
-    Reprovacao<br><small style="font-weight:400">aluno fica retido</small></div>
-    <span style="color:#94A3B8;font-size:1.2rem">&#8594;</span>
-    <div style="background:#FEF9C3;color:#92400E;padding:6px 12px;border-radius:4px;font-weight:600;text-align:center">
-    TDI: Defasagem<br><small style="font-weight:400">aluno mais velho que a turma</small></div>
-    <span style="color:#94A3B8;font-size:1.2rem">&#8594;</span>
-    <div style="background:#FFEDD5;color:#9A3412;padding:6px 12px;border-radius:4px;font-weight:600;text-align:center">
-    Desmotivacao<br><small style="font-weight:400">saida no ano letivo</small></div>
-    <span style="color:#94A3B8;font-size:1.2rem">&#8594;</span>
-    <div style="background:#FEE2E2;color:#991B1B;padding:6px 12px;border-radius:4px;font-weight:600;text-align:center">
-    Evasao<br><small style="font-weight:400">saida definitiva</small></div>
-    </div>
-    <p style="color:#475569;font-size:0.85rem;margin:0">
-    <b>Interromper essa cadeia em qualquer etapa reduz a evasao.</b>
-    No Ensino Medio, fatores externos agravam o problema: pressao para trabalhar, currículo distante da realidade
-    e menor percepcao de obrigatoriedade — especialmente em periodos de crise economica como a pandemia.
-    </p>
-    </div>
-    """, unsafe_allow_html=True)
+<div style="background:#F8FAFC;border:1px solid #CBD5E1;padding:16px 20px;border-radius:6px">
+<p style="color:#374151;font-size:0.91rem;margin:0 0 14px 0;line-height:1.7">
+A cadeia abaixo explica a logica que os dados confirmam:
+</p>
+<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+<div style="background:#FEE2E2;color:#991B1B;padding:8px 14px;border-radius:4px;font-weight:600;font-size:0.87rem;text-align:center">
+REPROVACAO<br><small style="font-weight:400">aluno nao avanca de serie</small></div>
+<span style="color:#94A3B8;font-size:1.4rem">→</span>
+<div style="background:#FEF9C3;color:#92400E;padding:8px 14px;border-radius:4px;font-weight:600;font-size:0.87rem;text-align:center">
+DEFASAGEM (TDI)<br><small style="font-weight:400">aluno mais velho que a turma</small></div>
+<span style="color:#94A3B8;font-size:1.4rem">→</span>
+<div style="background:#FFEDD5;color:#9A3412;padding:8px 14px;border-radius:4px;font-weight:600;font-size:0.87rem;text-align:center">
+DESMOTIVACAO<br><small style="font-weight:400">sentimento de exclusao</small></div>
+<span style="color:#94A3B8;font-size:1.4rem">→</span>
+<div style="background:#FEE2E2;color:#991B1B;padding:8px 14px;border-radius:4px;font-weight:600;font-size:0.87rem;text-align:center">
+ABANDONO<br><small style="font-weight:400">saida no meio do ano</small></div>
+<span style="color:#94A3B8;font-size:1.4rem">→</span>
+<div style="background:#991B1B;color:white;padding:8px 14px;border-radius:4px;font-weight:600;font-size:0.87rem;text-align:center">
+EVASAO<br><small style="font-weight:400">saida definitiva</small></div>
+</div>
+<p style="color:#475569;font-size:0.87rem;margin:0;line-height:1.6">
+<b>Como funciona na pratica:</b> um aluno que reprova fica em uma turma com colegas mais novos.
+Isso gera desconforto social, sensacao de fracasso e perda de motivacao.
+Com o tempo, o aluno falta cada vez mais — ate sair definitivamente.
+Durante a pandemia, essa cadeia se acelerou: alunos que ja tinham defasagem encontraram
+ainda mais dificuldade no ensino remoto e muitos optaram por trabalhar.
+<b>Qualquer intervencao que quebre essa cadeia em algum elo reduz a evasao.</b>
+</p>
+</div>
+""", unsafe_allow_html=True)
 
     st.divider()
 
-    # ── Correlações ────────────────────────────────────────────────────────────
+    # ── Gráficos de correlação ─────────────────────────────────────────────────
     col1, col2 = st.columns(2)
 
     with col1:
-        secao("A reprovacao causa mais evasao?",
-              "Cada ponto = 1 ano. Linha tracejada = tendencia. Pontos mais a direita e mais acima = pior.")
+        pre_grafico(
+            "Mais reprovacao leva a mais evasao?",
+            "Sim. Nos dados de Recife, anos com mais reprovacao no Ensino Medio "
+            "sempre apresentam mais evasao no mesmo periodo.",
+            "Cada ponto no grafico representa um ano. "
+            "O eixo horizontal mostra a reprovacao; o eixo vertical mostra a evasao. "
+            "A linha tracejada indica a tendencia geral. "
+            "Pontos no canto superior direito sao os anos mais criticos.",
+        )
         xc, yc = "taxa_repetencia_em", "taxa_evasao_em"
         if xc in df_socio.columns and yc in df_socio.columns:
             s = df_socio.dropna(subset=[xc, yc])
             if len(s) >= 3:
                 fig = go.Figure()
-                scatter_tendencia(fig, s[xc].values, s[yc].values, "Ensino Medio", COR_EM, s["ano"].values)
+                result = scatter_tendencia(fig, s[xc].values, s[yc].values, COR_EM, s["ano"].values)
+                fig_out, slope = result if isinstance(result, tuple) else (result, None)
                 fig.add_hline(y=s[yc].mean(), line_dash="dot", line_color=COR_CINZA, opacity=0.5,
-                              annotation_text=f"Media: {s[yc].mean():.1f}%", annotation_position="right")
+                              annotation_text=f"Media evasao: {s[yc].mean():.1f}%",
+                              annotation_position="right")
                 fig.add_vline(x=s[xc].mean(), line_dash="dot", line_color=COR_CINZA, opacity=0.5,
-                              annotation_text=f"Media: {s[xc].mean():.1f}%", annotation_position="top")
-                fig.update_layout(xaxis_title="Reprovacao EM (%)", yaxis_title="Evasao EM (%)",
-                                  showlegend=False, height=340)
+                              annotation_text=f"Media reprovacao: {s[xc].mean():.1f}%",
+                              annotation_position="top")
+                fig.update_layout(
+                    xaxis_title="Reprovacao no EM (%)",
+                    yaxis_title="Evasao no EM (%)",
+                    showlegend=False, height=360,
+                )
                 st.plotly_chart(fig, use_container_width=True)
                 r = np.corrcoef(s[xc].values, s[yc].values)[0, 1]
                 forca = "muito forte" if abs(r) > 0.8 else ("forte" if abs(r) > 0.6 else "moderada")
-                bloco_insight(
-                    "ruim" if abs(r) > 0.5 else "info",
-                    f"Sim: relacao {forca} ({r:.2f})",
-                    "A linha tracejada sobe da esquerda para a direita: mais reprovacao = mais evasao. "
-                    "Isso acontece porque a reprovacao gera defasagem, que gera desmotivacao, "
-                    "que leva ao abandono. A relacao se intensificou com a pandemia. "
-                    "Acao: reducao da reprovacao e a intervencao mais eficaz para reduzir a evasao."
+                slope_txt = (
+                    f"Cada aumento de 1 p.p. na reprovacao esta associado a um aumento de "
+                    f"{abs(slope):.2f} p.p. na evasao. "
+                    if slope is not None else ""
+                )
+                pos_grafico(
+                    f"Existe uma relacao {forca} (indice {r:.2f}) entre reprovacao e evasao no EM. "
+                    f"{slope_txt}"
+                    "Isso confirma o primeiro elo da cadeia causal. "
+                    "Reduzir a reprovacao e a intervencao com maior impacto direto na evasao. "
+                    "Essa relacao se intensificou apos a pandemia, quando alunos retornaram com "
+                    "grandes lacunas de aprendizagem.",
+                    "atencao",
                 )
             else:
-                st.warning("Dados insuficientes para esta analise. Amplie o periodo.")
+                st.warning("Dados insuficientes para esta analise. Amplie o periodo de analise.")
 
     with col2:
-        secao("A defasagem escolar (TDI) leva ao abandono?",
-              "Cada ponto = 1 ano. Quanto mais alto o TDI, maior tende a ser o abandono.")
+        pre_grafico(
+            "Mais defasagem escolar (TDI) leva a mais abandono?",
+            "Sim. O TDI (percentual de alunos com mais de 2 anos de atraso escolar) "
+            "e um dos preditores mais fortes do abandono.",
+            "O TDI — Taxa de Distorcao Idade-Serie — mede quantos alunos estao cursando "
+            "uma serie abaixo do esperado para sua idade. "
+            "Um aluno mais velho que os colegas sente-se deslocado e desiste mais facilmente. "
+            "Cada ponto e um ano; a linha tracejada mostra a tendencia.",
+        )
         if all(c in df_int.columns for c in ["tdi_em", "taxa_abandono_em"]):
             s2 = df_int.dropna(subset=["tdi_em", "taxa_abandono_em"])
             if len(s2) >= 3:
                 fig2 = go.Figure()
-                scatter_tendencia(fig2, s2["tdi_em"].values, s2["taxa_abandono_em"].values,
-                                  "Ensino Medio", COR_ABANDONO, s2["ano"].values)
-                fig2.update_layout(xaxis_title="TDI — Defasagem Escolar EM (%)",
-                                   yaxis_title="Abandono EM (%)", showlegend=False, height=340)
+                result2 = scatter_tendencia(fig2, s2["tdi_em"].values, s2["taxa_abandono_em"].values,
+                                            COR_ABANDONO, s2["ano"].values)
+                _, slope2 = result2 if isinstance(result2, tuple) else (result2, None)
+                fig2.update_layout(
+                    xaxis_title="TDI — Defasagem Escolar EM (%)",
+                    yaxis_title="Abandono no EM (%)",
+                    showlegend=False, height=360,
+                )
                 st.plotly_chart(fig2, use_container_width=True)
                 r2 = np.corrcoef(s2["tdi_em"].values, s2["taxa_abandono_em"].values)[0, 1]
                 forca2 = "muito forte" if abs(r2) > 0.8 else ("forte" if abs(r2) > 0.6 else "moderada")
-                bloco_insight(
-                    "ruim" if abs(r2) > 0.5 else "info",
-                    f"Sim: relacao {forca2} ({r2:.2f})",
-                    "TDI mede quantos alunos estao cursando uma serie abaixo do esperado para sua idade. "
-                    "Aluno mais velho que os colegas sente-se deslocado e desiste mais. "
-                    "Aulas de nivelamento reduzem o TDI e, consequentemente, o abandono. "
-                    "Acao: identificar alunos com mais de 2 anos de defasagem e oferecer reforco imediato."
+                slope2_txt = (
+                    f"Cada ponto percentual a mais de defasagem esta associado a um aumento de "
+                    f"{abs(slope2):.2f} p.p. no abandono. "
+                    if slope2 is not None else ""
+                )
+                pos_grafico(
+                    f"Existe uma relacao {forca2} (indice {r2:.2f}) entre defasagem (TDI) e abandono. "
+                    f"{slope2_txt}"
+                    "Isso confirma o segundo elo da cadeia: a defasagem leva ao abandono. "
+                    "Alunos mais velhos em turmas mais jovens se sentem excluidos e desistem. "
+                    "Programas de nivelamento e reforco em contraturno reduzem o TDI e, "
+                    "em consequencia, o abandono.",
+                    "atencao",
                 )
             else:
-                st.warning("Dados insuficientes. Amplie o periodo.")
+                st.warning("Dados insuficientes. Amplie o periodo de analise.")
 
     st.divider()
 
-    # ── Diagnóstico fator a fator ──────────────────────────────────────────────
-    secao("Quais indicadores estao criticos agora?",
-          f"Diagnostico do ultimo ano do periodo selecionado vs. referencias nacionais do INEP.")
+    # ── Diagnóstico dos indicadores ────────────────────────────────────────────
+    st.markdown("### Quais indicadores estao fora do limite aceitavel?")
+    st.write(
+        "Comparacao dos valores mais recentes do periodo selecionado com referencias nacionais do INEP. "
+        "Indicadores acima do limite aceitavel exigem atencao ou acao imediata."
+    )
 
     if not df_int.empty:
         ultimo = df_int.sort_values("ano").iloc[-1]
         ano_ref = int(ultimo["ano"])
+        st.caption(f"Ano de referencia: {ano_ref}.")
 
         fatores = []
-        def av(col, label, lim_a, lim_c, ref):
+        def av(col, label, lim_a, lim_c, ref_txt):
             v = float(ultimo.get(col, np.nan) or np.nan)
-            if pd.isna(v): return
+            if pd.isna(v):
+                return
             nv = "Critico" if v >= lim_c else ("Atencao" if v >= lim_a else "OK")
-            fatores.append(dict(label=label, valor=v, nivel=nv, ref=ref))
+            fatores.append(dict(label=label, valor=v, nivel=nv, ref=ref_txt))
 
-        av("taxa_evasao_em",     "Evasao EM",      5,  10, "Aceitavel: ate 5%")
-        av("taxa_abandono_em",   "Abandono EM",     5,  10, "Aceitavel: ate 5%")
-        av("tdi_em",             "TDI EM",         20,  30, "Aceitavel: ate 20%")
-        av("taxa_repetencia_em", "Reprovacao EM",   8,  15, "Aceitavel: ate 8%")
-        av("taxa_evasao_ef",     "Evasao EF",       3,   6, "Aceitavel: ate 3%")
+        av("taxa_evasao_em",     "Evasao EM",            5,  10, "Limite aceitavel: ate 5%")
+        av("taxa_abandono_em",   "Abandono EM",          5,  10, "Limite aceitavel: ate 5%")
+        av("tdi_em",             "TDI — Defasagem EM",  20,  30, "Limite aceitavel: ate 20%")
+        av("taxa_repetencia_em", "Reprovacao EM",        8,  15, "Limite aceitavel: ate 8%")
+        av("taxa_evasao_ef",     "Evasao EF",            3,   6, "Limite aceitavel: ate 3%")
 
-        st.caption(f"Ano de referencia: {ano_ref}")
-        crit = [f for f in fatores if f["nivel"] == "Critico"]
-        atenc = [f for f in fatores if f["nivel"] == "Atencao"]
-        ok_f  = [f for f in fatores if f["nivel"] == "OK"]
+        criticos = [f for f in fatores if f["nivel"] == "Critico"]
+        atencao  = [f for f in fatores if f["nivel"] == "Atencao"]
+        ok_list  = [f for f in fatores if f["nivel"] == "OK"]
 
-        if crit:
-            st.error("**Indicadores criticos** (exigem acao imediata):\n" +
-                     "\n".join(f"- **{f['label']}**: {f['valor']:.1f}% ({f['ref']})" for f in crit))
-        if atenc:
-            st.warning("**Indicadores em atencao** (monitorar de perto):\n" +
-                       "\n".join(f"- **{f['label']}**: {f['valor']:.1f}% ({f['ref']})" for f in atenc))
-        if ok_f:
-            st.success("**Indicadores dentro do limite aceitavel:**\n" +
-                       "\n".join(f"- **{f['label']}**: {f['valor']:.1f}%" for f in ok_f))
+        if criticos:
+            st.error(
+                "**Indicadores criticos — exigem acao imediata:**\n"
+                + "\n".join(
+                    f"- **{f['label']}**: {f['valor']:.1f}% ({f['ref']})"
+                    for f in criticos
+                )
+            )
+        if atencao:
+            st.warning(
+                "**Indicadores em atencao — monitorar de perto:**\n"
+                + "\n".join(
+                    f"- **{f['label']}**: {f['valor']:.1f}% ({f['ref']})"
+                    for f in atencao
+                )
+            )
+        if ok_list:
+            st.success(
+                "**Indicadores dentro do limite aceitavel:**\n"
+                + "\n".join(
+                    f"- **{f['label']}**: {f['valor']:.1f}%"
+                    for f in ok_list
+                )
+            )
 
     st.divider()
 
-    # ── Matriz de correlação ──────────────────────────────────────────────────
-    secao("Quando um indicador piora, quais outros pioram junto?",
-          "Verde = relacao inversa (um sobe, o outro cai). Vermelho = relacao direta (ambos sobem juntos).")
-
-    st.info(
-        "**Como ler sem estatistica:** olhe apenas as cores. Vermelho escuro = dois problemas andam juntos. "
-        "Verde escuro = um indicador positivo esta associado a menor evasao. "
-        "Os numeros nao sao essenciais — as cores ja comunicam o suficiente."
+    # ── Mapa de correlação ─────────────────────────────────────────────────────
+    pre_grafico(
+        "Quando um indicador piora, quais outros pioram junto?",
+        "Reprovacao, TDI e abandono formam um grupo de indicadores que sempre pioram juntos. "
+        "Aprovacao e promocao caminham em sentido oposto a evasao.",
+        "O mapa de calor abaixo mostra a relacao entre todos os indicadores simultaneamente. "
+        "Vermelho escuro = dois indicadores sobem juntos (relacao direta). "
+        "Verde escuro = um sobe enquanto o outro cai (relacao inversa). "
+        "Branco/amarelo = pouca relacao entre os dois. "
+        "Nao e necessario analisar os numeros — as cores ja comunicam o suficiente.",
     )
 
     cols_c = [c for c in [
-        "taxa_evasao_em", "taxa_abandono_em", "taxa_repetencia_em", "taxa_reprovacao_em",
-        "tdi_em", "taxa_aprovacao_em", "taxa_promocao_em", "taxa_evasao_ef", "taxa_abandono_ef", "tdi_ef",
+        "taxa_evasao_em", "taxa_abandono_em", "taxa_repetencia_em",
+        "taxa_reprovacao_em", "tdi_em", "taxa_aprovacao_em",
+        "taxa_promocao_em", "taxa_evasao_ef", "taxa_abandono_ef", "tdi_ef",
     ] if c in df_int.columns]
 
     nomes = {
-        "taxa_evasao_em": "Evasao EM", "taxa_abandono_em": "Abandono EM",
-        "taxa_repetencia_em": "Reprovacao EM", "taxa_reprovacao_em": "Reprovacao EM (b)",
-        "tdi_em": "TDI EM", "taxa_aprovacao_em": "Aprovacao EM",
-        "taxa_promocao_em": "Promocao EM", "taxa_evasao_ef": "Evasao EF",
-        "taxa_abandono_ef": "Abandono EF", "tdi_ef": "TDI EF",
+        "taxa_evasao_em":     "Evasao EM",
+        "taxa_abandono_em":   "Abandono EM",
+        "taxa_repetencia_em": "Reprovacao EM",
+        "taxa_reprovacao_em": "Reprovacao EM (base educ.)",
+        "tdi_em":             "TDI — Defasagem EM",
+        "taxa_aprovacao_em":  "Aprovacao EM",
+        "taxa_promocao_em":   "Promocao EM",
+        "taxa_evasao_ef":     "Evasao EF",
+        "taxa_abandono_ef":   "Abandono EF",
+        "tdi_ef":             "TDI — Defasagem EF",
     }
 
     df_c = df_int[[c for c in cols_c if c in df_int.columns]].dropna(how="all").rename(columns=nomes)
     if len(df_c) >= 3:
         corr = df_c.corr()
-        col_c1, col_c2 = st.columns([3, 2])
-        with col_c1:
-            fig_corr = px.imshow(corr, color_continuous_scale="RdYlGn", zmin=-1, zmax=1,
-                                 text_auto=".2f", aspect="auto")
+        col_m, col_r = st.columns([3, 2])
+        with col_m:
+            fig_corr = px.imshow(
+                corr, color_continuous_scale="RdYlGn",
+                zmin=-1, zmax=1, text_auto=".2f", aspect="auto",
+            )
             fig_corr.update_layout(height=420)
             st.plotly_chart(fig_corr, use_container_width=True)
-        with col_c2:
-            st.markdown("**Principais achados:**")
+        with col_r:
+            st.markdown("**O que o mapa confirma:**")
             achados = []
-            for par_a, par_b in [("Aprovacao EM","Evasao EM"), ("TDI EM","Evasao EM"),
-                                  ("Reprovacao EM","Evasao EM"), ("Abandono EM","Evasao EM")]:
-                if par_a in corr.columns and par_b in corr.columns:
-                    rv = round(corr.loc[par_a, par_b], 2)
+            pares = [
+                ("Aprovacao EM", "Evasao EM"),
+                ("TDI — Defasagem EM", "Evasao EM"),
+                ("Reprovacao EM", "Evasao EM"),
+                ("Abandono EM", "Evasao EM"),
+            ]
+            for a_n, b_n in pares:
+                if a_n in corr.columns and b_n in corr.columns:
+                    rv = round(corr.loc[a_n, b_n], 2)
                     if abs(rv) > 0.4:
-                        direcao = "mais aprovacao = menos evasao" if rv < 0 else "mais um = mais o outro"
-                        achados.append(f"**{par_a} x {par_b}:** {rv} ({direcao})")
-            if achados:
-                for a in achados: st.markdown(f"- {a}")
-            else:
-                st.caption("Amplíe o período para calcular correlações significativas.")
+                        direcao = "mais aprovacao = menos evasao" if rv < -0.4 else "ambos sobem juntos"
+                        achados.append(f"**{a_n} x {b_n}**: {rv} ({direcao})")
+            for a in achados:
+                st.markdown(f"- {a}")
+
             st.markdown("")
-            bloco_insight("bom", "Conclusao principal",
-                "Aprovacao e Promocao andam em sentido oposto a evasao — "
-                "mais alunos aprovados significa menos evasao. "
-                "Acao: qualquer politica que aumente a aprovacao reduz a evasao.")
+            pos_grafico(
+                "O mapa confirma a cadeia causal: reprovacao, TDI e abandono estao fortemente "
+                "associados entre si e com a evasao (vermelho). "
+                "Aprovacao e promocao caminham no sentido oposto (verde). "
+                "Isso significa que qualquer politica que aumente a aprovacao reduz a evasao, "
+                "e qualquer politica que reduza a reprovacao quebra a cadeia.",
+                "info",
+            )
         st.warning(
-            f"A matriz e calculada com {len(df_c)} pontos de dados. "
-            "Com menos de 10, os resultados indicam tendencias, mas nao sao estatisticamente definitivos."
+            f"O mapa e calculado com {len(df_c)} pontos de dados (anos). "
+            "Com menos de 10 pontos, os resultados indicam tendencias e nao sao estatisticamente definitivos. "
+            "Ampliar o periodo melhora a confiabilidade da analise."
         )
     else:
-        st.warning("Dados insuficientes para calcular a matriz de correlacao. Amplie o periodo de analise.")
+        st.warning("Dados insuficientes para o mapa de correlacao. Amplie o periodo de analise.")
 
-    transicao_pagina(
-        "Agora que voce conhece as causas, acesse 'Plano de Acao' para ver as intervencoes recomendadas."
+    st.caption(
+        "Proxima secao: 'Conclusoes e Preditores para Machine Learning' — "
+        "consolidacao dos insights e preparacao para o modelo preditivo."
     )
 
 
 # ===========================================================================
-# PÁGINA 5 — PLANO DE AÇÃO: "O que fazer?"
+# PAGINA 5 — CONCLUSÕES E MODELO PREDITIVO
 # ===========================================================================
-def pagina_acoes(dados: dict, filtros: dict, insights: dict):
-    st.markdown("# Plano de Acao — O que fazer para reduzir a evasao?")
-    st.caption(
-        "Acoes priorizadas por urgencia, baseadas nos fatores de risco identificados nos dados. "
-        "Cada acao esta conectada a um indicador especifico."
+def pagina_conclusoes(dados: dict, filtros: dict, ins: dict):
+    st.markdown("# Conclusoes, Insights e Base para Machine Learning")
+    st.write(
+        "Esta secao consolida os principais aprendizados do dashboard e prepara o terreno "
+        "para a etapa de modelagem preditiva. "
+        "O objetivo final e construir um modelo capaz de antecipar o risco de evasao "
+        "antes que ele se concretize."
     )
 
     a1, a2 = filtros["ano_range"]
-    df_int = dados["fato_integrado"].copy()
-    df_int = df_int[(df_int["ano"] >= a1) & (df_int["ano"] <= a2)]
+    df_int  = dados["fato_integrado"][(dados["fato_integrado"]["ano"].between(a1, a2))].copy()
 
-    if df_int.empty:
-        st.warning("Sem dados para o periodo selecionado.")
-        return
+    # ── Insights consolidados ──────────────────────────────────────────────────
+    st.markdown("### Os 5 principais insights dos dados")
 
-    ultimo = df_int.sort_values("ano").iloc[-1]
-    def sv(c): return float(ultimo.get(c, 0) or 0)
-    sc    = sv("indice_risco_evasao")
-    ev    = sv("taxa_evasao_em")
-    ab    = sv("taxa_abandono_em")
-    tdi   = sv("tdi_em")
-    rep   = sv("taxa_repetencia_em")
-    atu   = sv("atu_em")
-    nivel = classificar_risco(pd.Series([sc])).iloc[0]
+    i1, i2 = st.columns(2)
+    with i1:
+        st.success(
+            "**1. As politicas educacionais funcionam quando sustentadas.**\n\n"
+            "A queda consistente da evasao entre 2008 e 2019 nao foi acidental. "
+            "Ela e resultado de politicas de expansao do acesso, programas sociais "
+            "e melhoria gradual da cobertura educacional. "
+            "O progresso levou anos para ser construido e poucos meses para ser revertido pela pandemia."
+        )
+        st.warning(
+            "**2. O Ensino Medio e estruturalmente mais vulneravel.**\n\n"
+            "A evasao no EM e em media 2 a 3 vezes maior do que no EF. "
+            "Isso nao e coincidencia: alunos entre 15–17 anos enfrentam maior pressao economica, "
+            "percebem o curriculo como menos relevante e sao mais impactados por crises. "
+            "Politicas genericas nao funcionam para o EM — sao necessarias acoes especificas."
+        )
+        st.error(
+            "**3. A pandemia reverteu anos de avanco em poucos meses.**\n\n"
+            "O fechamento das escolas, o ensino remoto desigual e a crise economica "
+            "criaram um triplo choque que elevou a evasao a niveis historicamente altos. "
+            "O sistema educacional nao se recupera no mesmo ritmo em que foi afetado — "
+            "os efeitos da pandemia continuam presentes nos dados de 2022."
+        )
+    with i2:
+        st.info(
+            "**4. Reprovacao e TDI sao os preditores mais fortes de evasao.**\n\n"
+            "Os dados mostram que anos com mais reprovacao e maior defasagem "
+            "escolar (TDI — Taxa de Distorcao Idade-Serie) invariavelmente "
+            "apresentam mais evasao. Essa relacao e forte e consistente ao longo dos anos. "
+            "Qualquer intervencao que reduza a reprovacao ou a defasagem "
+            "impacta diretamente a evasao."
+        )
+        st.info(
+            "**5. A evasao pode ser prevista antes de acontecer.**\n\n"
+            "A existencia de uma cadeia causal clara — reprovacao, TDI, abandono, evasao — "
+            "significa que e possivel identificar alunos em risco antes que deixem a escola. "
+            "Um modelo preditivo que monitore esses indicadores continuamente "
+            "permitiria intervencoes preventivas muito mais eficazes e baratas."
+        )
 
-    # Diagnóstico atual
+    st.divider()
+
+    # ── Tabela de preditores para ML ───────────────────────────────────────────
+    st.markdown("### Quais variaveis sao os melhores preditores para um modelo de Machine Learning?")
+    st.write(
+        "Com base nas analises deste dashboard, as variaveis abaixo apresentam maior "
+        "potencial para prever a evasao escolar. "
+        "Esta tabela serve como guia para a construcao do modelo preditivo."
+    )
+
+    df_pred = pd.DataFrame([
+        {
+            "Variavel":             "Taxa de Abandono no EM (%)",
+            "Importancia estimada": "Muito Alta",
+            "Por que e relevante":  "Precursor direto e imediato da evasao. Aluno que abandona ja esta em saida.",
+            "Elo na cadeia causal": "4 — abandono",
+        },
+        {
+            "Variavel":             "TDI — Taxa de Distorcao Idade-Serie (%)",
+            "Importancia estimada": "Muito Alta",
+            "Por que e relevante":  "Forte correlacao com abandono. Indica acumulo historico de defasagem.",
+            "Elo na cadeia causal": "2 — defasagem",
+        },
+        {
+            "Variavel":             "Taxa de Reprovacao no EM (%)",
+            "Importancia estimada": "Alta",
+            "Por que e relevante":  "Origem da cadeia. Ano com mais reprovacao e preditor de mais evasao futura.",
+            "Elo na cadeia causal": "1 — reprovacao",
+        },
+        {
+            "Variavel":             "Taxa de Aprovacao no EM (%)",
+            "Importancia estimada": "Alta",
+            "Por que e relevante":  "Relacao inversa forte com evasao. Mais aprovacao = menos evasao.",
+            "Elo na cadeia causal": "Indicador de saude geral do sistema",
+        },
+        {
+            "Variavel":             "Media de Alunos por Turma — EM (ATU)",
+            "Importancia estimada": "Media",
+            "Por que e relevante":  "Turmas superlotadas dificultam acompanhamento individual e aumentam o risco.",
+            "Elo na cadeia causal": "Fator estrutural",
+        },
+        {
+            "Variavel":             "Periodo historico (pandemia sim/nao)",
+            "Importancia estimada": "Alta (como variavel de controle)",
+            "Por que e relevante":  "A pandemia gerou um choque estrutural que precisa ser tratado como variavel.",
+            "Elo na cadeia causal": "Fator externo",
+        },
+    ])
+    st.dataframe(df_pred, use_container_width=True, hide_index=True)
+
     st.info(
-        f"**Situacao atual (ano {int(ultimo['ano'])}):** "
-        f"Evasao EM = {ev:.1f}% | Abandono EM = {ab:.1f}% | TDI EM = {tdi:.1f}% | "
-        f"Reprovacao EM = {rep:.1f}% | Score de Risco = {sc:.0f}/100 ({nivel})"
+        "**Como usar esta tabela:** as variaveis de 'Importancia estimada' Alta ou Muito Alta "
+        "devem ser priorizadas na selecao de features do modelo. "
+        "A variavel de periodo historico (pandemia) e importante como variavel de controle — "
+        "sem ela, o modelo pode confundir o choque da pandemia com um padrao estrutural."
     )
 
     st.divider()
+
+    # ── Plano de ação priorizado ───────────────────────────────────────────────
+    st.markdown("### O que fazer? — Acoes priorizadas por urgencia")
+    st.write(
+        "Com base nos dados, as acoes abaixo estao ordenadas por nivel de urgencia. "
+        "Acoes imediatas atacam os sintomas mais visíveis. "
+        "Acoes de longo prazo constroem a resistencia estrutural do sistema."
+    )
+
+    if not df_int.empty:
+        ultimo = df_int.sort_values("ano").iloc[-1]
+        ab  = float(ultimo.get("taxa_abandono_em", 0) or 0)
+        tdi = float(ultimo.get("tdi_em", 0) or 0)
+        rep = float(ultimo.get("taxa_repetencia_em", 0) or 0)
+        atu = float(ultimo.get("atu_em", 0) or 0)
+    else:
+        ab = tdi = rep = atu = 0
 
     URGENCIAS = {
         "IMEDIATA":    ("#FEF2F2", "#991B1B"),
@@ -1130,100 +1380,111 @@ def pagina_acoes(dados: dict, filtros: dict, insights: dict):
     }
 
     acoes = [
-        {
-            "urgencia": "IMEDIATA",
-            "titulo": "Monitorar frequencia semanalmente",
-            "problema": f"Abandono EM: {ab:.1f}% (limite: 5%)",
-            "acao": "Alunos com mais de 25% de faltas estao em risco iminente de abandono. "
-                    "Implante controle de frequencia semanal e ative a familia quando o limite for atingido.",
-            "resultado": "Reduz o abandono em ate 30% (referencia INEP).",
-        },
-        {
-            "urgencia": "IMEDIATA",
-            "titulo": "Reforco escolar para alunos com defasagem (TDI)",
-            "problema": f"TDI EM: {tdi:.1f}% (limite: 20%)",
-            "acao": "Alunos cursando serie abaixo da esperada para sua idade tem chance muito maior de desistir. "
-                    "Aulas de nivelamento em contraturno reduzem essa defasagem.",
-            "resultado": "Queda no TDI → queda no abandono → queda na evasao.",
-        },
-        {
-            "urgencia": "CURTO PRAZO",
-            "titulo": "Revisar politica de reprovacao",
-            "problema": f"Reprovacao EM: {rep:.1f}% (limite: 8%)",
-            "acao": "A reprovacao e o principal fator de risco de evasao nos dados. "
-                    "Substitua a reprovacao por progressao continuada com suporte pedagogico intensivo. "
-                    "Isso nao significa aprovar sem criterio — significa dar suporte antes de reprovar.",
-            "resultado": "Interrompe a cadeia reprovacao → TDI → abandono → evasao.",
-        },
-        {
-            "urgencia": "CURTO PRAZO",
-            "titulo": "Reduzir numero de alunos por turma no EM",
-            "problema": f"ATU EM atual: {atu:.0f} alunos/turma (meta: ate 30)",
-            "acao": "Turmas superlotadas dificultam o acompanhamento individual. "
-                    "Meta: no maximo 30 alunos por turma no EM.",
-            "resultado": "Maior vinculo professor-aluno e reducao do abandono.",
-        },
-        {
-            "urgencia": "MEDIO PRAZO",
-            "titulo": "Ampliar EJA e Ensino Medio noturno",
-            "problema": "Evasao acumulada cria uma populacao fora do sistema.",
-            "acao": "Ofereça modalidades flexiveis (EJA, EM noturno) para quem precisou trabalhar e abandonou. "
-                    "Facilite a reintegracao com horarios compativeis.",
-            "resultado": "Reduz a evasao permanente e amplia a cobertura educacional.",
-        },
-        {
-            "urgencia": "MEDIO PRAZO",
-            "titulo": "Apoio socioemocional e reducao de barreiras externas",
-            "problema": "Parte da evasao tem causas externas (pobreza, violencia, distancia).",
-            "acao": "Bolsas condicionadas a frequencia, auxilio-transporte e apoio psicologico "
-                    "reduzem o impacto de fatores externos — especialmente em populacoes vulneraveis.",
-            "resultado": "Reduz a evasao causada por fatores socioeconomicos.",
-        },
-        {
-            "urgencia": "LONGO PRAZO",
-            "titulo": "Sistema de monitoramento continuo por escola",
-            "problema": "Identificacao tardia aumenta o custo de intervencao.",
-            "acao": "Dashboard atualizado mensalmente com dados de frequencia, desempenho e perfil por escola. "
-                    "Permite agir antes que o problema se agrave.",
-            "resultado": "Prevencao e mais barata e mais eficaz que remediacâo.",
-        },
-        {
-            "urgencia": "LONGO PRAZO",
-            "titulo": "Analise geografica da evasao por bairro",
-            "problema": "Recursos publicos podem ser mal alocados sem mapeamento geografico.",
-            "acao": "Cruzar dados educacionais com o IBGE por bairro e regiao (RPA) de Recife "
-                    "para identificar concentracoes de risco e direcionar recursos com mais precisao.",
-            "resultado": "Alocacao mais eficiente dos investimentos publicos em educacao.",
-        },
+        dict(urgencia="IMEDIATA",
+             titulo="Monitorar frequencia dos alunos do EM semanalmente",
+             descricao=(
+                 "Alunos com mais de 25% de faltas estao em risco iminente de abandono. "
+                 "Implante controle semanal e contate a familia quando o limite for atingido. "
+                 "Ferramentas simples funcionam — o que importa e a regularidade do monitoramento."
+             ),
+             indicador=f"Abandono EM atual: {ab:.1f}% (limite aceitavel: 5%)"),
+        dict(urgencia="IMEDIATA",
+             titulo="Reforco escolar para alunos com defasagem (TDI alto)",
+             descricao=(
+                 "Alunos com mais de 2 anos de atraso em relacao a serie esperada "
+                 "tem probabilidade muito maior de abandonar. "
+                 "Aulas de nivelamento em contraturno reduzem essa defasagem e aumentam a motivacao."
+             ),
+             indicador=f"TDI EM atual: {tdi:.1f}% (limite aceitavel: 20%)"),
+        dict(urgencia="CURTO PRAZO",
+             titulo="Revisar a politica de reprovacao — progressao com suporte",
+             descricao=(
+                 "A reprovacao e o principal preditor de evasao nos dados. "
+                 "Substituir a retencao automatica por progressao com apoio pedagogico intensivo "
+                 "quebra o primeiro elo da cadeia causal. "
+                 "Isso nao significa aprovar sem criterio — significa dar suporte antes de reter."
+             ),
+             indicador=f"Reprovacao EM atual: {rep:.1f}% (limite aceitavel: 8%)"),
+        dict(urgencia="CURTO PRAZO",
+             titulo="Reduzir o numero de alunos por turma no Ensino Medio",
+             descricao=(
+                 "Turmas com mais de 35 alunos dificultam o acompanhamento individual. "
+                 "Meta: no maximo 30 alunos por turma no EM. "
+                 "Isso melhora o vinculo professor-aluno e permite identificar problemas antes que virem abandono."
+             ),
+             indicador=f"Alunos por turma EM atual: {atu:.0f} (meta: ate 30)"),
+        dict(urgencia="MEDIO PRAZO",
+             titulo="Ampliar oferta de EJA e Ensino Medio noturno",
+             descricao=(
+                 "Estudantes que ja evadiram precisam de modalidades flexiveis para retornar. "
+                 "A EJA (Educacao de Jovens e Adultos) e o EM noturno atendem quem precisa trabalhar. "
+                 "Ampliar essas opcoes reduz a evasao permanente."
+             ),
+             indicador="Evasao acumulada cria uma populacao fora do sistema"),
+        dict(urgencia="LONGO PRAZO",
+             titulo="Implantar modelo preditivo de risco de evasao por aluno",
+             descricao=(
+                 "As analises deste dashboard mostram que a evasao e previsivel. "
+                 "Um modelo de Machine Learning treinado com os dados disponíveis "
+                 "poderia identificar alunos em risco meses antes do abandono, "
+                 "permitindo intervencoes preventivas muito mais eficazes e baratas."
+             ),
+             indicador="A cadeia causal identificada nos dados viabiliza a modelagem preditiva"),
     ]
 
     for ac in acoes:
         bg, borda = URGENCIAS[ac["urgencia"]]
         st.markdown(
-            f"""<div style="background:{bg};border-left:5px solid {borda};
-            padding:14px 18px;border-radius:4px;margin-bottom:12px;">
-            <span style="background:{borda};color:white;padding:2px 9px;border-radius:3px;
-            font-size:0.72rem;font-weight:700;letter-spacing:0.06em">{ac['urgencia']}</span>
-            <b style="display:block;color:#1E293B;font-size:0.95rem;margin:6px 0 4px 0">{ac['titulo']}</b>
-            <p style="color:#374151;font-size:0.87rem;margin:0 0 6px 0;line-height:1.55">{ac['acao']}</p>
-            <p style="color:#6B7280;font-size:0.8rem;margin:0">
-            <b>Indicador:</b> {ac['problema']} &nbsp;|&nbsp; <b>Resultado esperado:</b> {ac['resultado']}
-            </p></div>""",
+            f'<div style="background:{bg};border-left:5px solid {borda};'
+            f'padding:14px 18px;border-radius:4px;margin-bottom:12px">'
+            f'<span style="background:{borda};color:white;padding:2px 9px;border-radius:3px;'
+            f'font-size:0.72rem;font-weight:700;letter-spacing:0.06em">{ac["urgencia"]}</span>'
+            f'<b style="display:block;color:#1E293B;font-size:0.94rem;margin:6px 0 5px 0">{ac["titulo"]}</b>'
+            f'<p style="color:#374151;font-size:0.87rem;margin:0 0 6px 0;line-height:1.55">{ac["descricao"]}</p>'
+            f'<p style="color:#6B7280;font-size:0.8rem;margin:0"><b>Indicador:</b> {ac["indicador"]}</p>'
+            f'</div>',
             unsafe_allow_html=True,
         )
 
     st.divider()
-    st.markdown("#### Resumo consolidado")
-    df_res = pd.DataFrame([
-        {"Urgencia": a["urgencia"], "Acao": a["titulo"], "Indicador de alerta": a["problema"]}
-        for a in acoes
-    ])
-    st.dataframe(df_res, use_container_width=True, hide_index=True)
 
-    transicao_pagina(
-        "Voce percorreu todo o fluxo do painel: problema, evolucao, risco, causas e acoes. "
-        "Use as paginas anteriores para apresentar o contexto antes de propor as acoes desta pagina."
+    # ── Placeholder para modelo preditivo ─────────────────────────────────────
+    st.markdown("### [Em desenvolvimento] — Modelo Preditivo de Risco de Evasao")
+    st.info(
+        "**O que sera adicionado aqui:**\n\n"
+        "Um modelo de Machine Learning treinado com os dados historicos de Recife para:\n\n"
+        "- Estimar a probabilidade de evasao nos proximos anos com base nas variaveis atuais\n"
+        "- Identificar automaticamente os grupos de alunos mais vulneraveis\n"
+        "- Simular o impacto de intervencoes especificas (ex: 'se a reprovacao cair 2 p.p., "
+        "a evasao deve cair X p.p.')\n\n"
+        "**As variaveis prioritarias para o modelo**, com base neste dashboard:\n"
+        "TDI, taxa de abandono, taxa de reprovacao, taxa de aprovacao e periodo historico.\n\n"
+        "**Por enquanto**, o Score de Risco calculado manualmente (disponivel na barra lateral) "
+        "serve como aproximacao do que o modelo fara de forma mais precisa e automatizada."
     )
+
+    # Simulacao simples como prévia
+    with st.expander("Ver projecao simplificada (tendencia linear — apenas indicativa)"):
+        df_sim = dados["fato_educacional"].copy().sort_values("ano")
+        df_sim["score"] = calcular_score(df_sim)
+        por_ano = df_sim.groupby("ano")["score"].mean().dropna().reset_index()
+        if len(por_ano) >= 4:
+            z = np.polyfit(por_ano["ano"], por_ano["score"], 1)
+            proximos = [por_ano["ano"].max() + 1, por_ano["ano"].max() + 2]
+            proj = [round(max(0, np.poly1d(z)(a)), 1) for a in proximos]
+            df_proj = pd.DataFrame({
+                "Ano (projecao)": proximos,
+                "Score estimado (0–100)": proj,
+                "Nivel estimado": [classificar_risco(pd.Series([p])).iloc[0] for p in proj],
+            })
+            st.dataframe(df_proj, use_container_width=True, hide_index=True)
+            st.caption(
+                "ATENCAO: esta projecao usa apenas tendencia linear historica. "
+                "Nao considera fatores externos, politicas futuras ou mudancas estruturais. "
+                "Use apenas como indicativo de direcao, nao como previsao."
+            )
+        else:
+            st.caption("Dados insuficientes para projecao. Amplie o periodo de analise.")
 
 
 # ===========================================================================
@@ -1234,28 +1495,26 @@ def main():
     dados = carregar_dados()
 
     if not dados:
-        st.error("Dados nao encontrados. Execute o ETL primeiro.")
+        st.error("Dados nao encontrados. Execute o ETL primeiro (botao na barra lateral).")
         st.stop()
 
-    # Insights globais calculados uma vez
-    insights = computar_insights(dados)
-
+    ins     = computar_insights(dados)
     filtros = sidebar(dados)
 
     PAGINAS = {
-        "Visao Geral — Qual e o problema?":                pagina_visao_geral,
-        "Evolucao Historica — Como o problema mudou?":     pagina_evolucao,
-        "Identificacao de Risco — Quem esta em risco?":    pagina_risco,
-        "Por que ocorre? — Quais sao as causas?":          pagina_causas,
-        "Plano de Acao — O que fazer?":                    pagina_acoes,
+        "1. Contexto Geral":                  pagina_contexto,
+        "2. Evolucao ao Longo do Tempo":       pagina_evolucao,
+        "3. Impacto da Pandemia":              pagina_pandemia,
+        "4. Por que os Alunos Evadem?":        pagina_relacoes,
+        "5. Conclusoes e Modelo Preditivo":    pagina_conclusoes,
     }
 
     st.sidebar.divider()
-    pagina_atual = st.sidebar.radio("Navegacao", list(PAGINAS.keys()))
-    PAGINAS[pagina_atual](dados, filtros, insights)
+    pagina_atual = st.sidebar.radio("Secoes do painel", list(PAGINAS.keys()))
+    PAGINAS[pagina_atual](dados, filtros, ins)
 
     st.sidebar.divider()
-    st.sidebar.caption("Analise de Evasao Escolar | Recife | INEP/MEC")
+    st.sidebar.caption("Painel de Evasao Escolar | Recife | INEP/MEC | 2008–2022")
 
 
 if __name__ == "__main__":

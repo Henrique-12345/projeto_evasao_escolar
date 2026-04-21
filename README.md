@@ -125,53 +125,61 @@ O pipeline em `etl/etl_pipeline.py` executa três etapas:
 
 ## Dashboard
 
-O dashboard interativo é organizado em **5 páginas orientadas à tomada de decisão**, sem jargão excessivo, projetadas para usuários técnicos e não técnicos.
+O dashboard é organizado como uma **narrativa em 5 seções**, projetada para comunicar insights de forma clara para qualquer pessoa — técnica ou não. Cada visualização é acompanhada de texto explicativo antes e depois do gráfico.
 
-| Página | Propósito | Conteúdo Principal |
+| Seção | Pergunta respondida | Conteúdo principal |
 |---|---|---|
-| Painel de Indicadores | Visão geral executiva | KPIs com variação em p.p., alertas automáticos, gauge do score de risco, evolução histórica |
-| Onde está o risco? | Identificação dos casos críticos | Distribuição por nível de risco, ranking com barra de progresso, mapa de calor ano × risco |
-| Por que ocorre? | Análise causal | Cadeia causal explicada, correlações reprovação × evasão e TDI × abandono, diagnóstico por indicador, matriz de correlação interativa |
-| O que fazer? | Recomendações priorizadas | 8 ações ordenadas por urgência (Imediata / Curto / Médio / Longo prazo) com justificativa nos dados |
-| Como a evasão evoluiu? | Análise histórica | Série temporal completa, variação ano a ano, comparação EF × EM, boxplots por período histórico |
+| 1. Contexto Geral | Qual é o problema? | KPIs do ano mais recente, Score de Risco com gauge, diagnóstico automático, variação do período |
+| 2. Evolução ao Longo do Tempo | Como o problema mudou ano a ano? | Série temporal de evasão e abandono, variação anual, comparação EF × EM, boxplots por período histórico |
+| 3. Impacto da Pandemia | Por que 2020–2021 foram tão ruins? | Explicação dos 3 mecanismos (fechamento, ensino remoto, crise econômica), score antes/durante/após, comparação de indicadores por período |
+| 4. Por que os Alunos Evadem? | Quais são as causas? | Cadeia causal (reprovação → TDI → abandono → evasão), correlações com scatter e tendência, diagnóstico por indicador, mapa de correlação |
+| 5. Conclusões e Modelo Preditivo | O que fazer? Quais variáveis usar no modelo? | 5 insights consolidados, tabela de preditores para ML, plano de ação por urgência, projeção simplificada |
 
-**Funcionalidades:**
-- **Score de Risco 0–100** por registro e por ano — calculado como: Abandono EM (40%) + TDI (30%) + Reprovação EM (30%)
-- **Níveis de risco**: Baixo (0–20) | Moderado (20–35) | Alto (35–50) | Critico (acima de 50)
-- **Alertas automáticos** com contexto e interpretação, gerados a partir de limiares nos indicadores
-- **Textos interpretativos** em cada gráfico, respondendo o que o dado mostra e por que é relevante
-- **Glossário completo** na barra lateral com definições de TDI, p.p., abandono, evasão, ATU, HAD etc.
-- **Notas de qualidade dos dados** indicando limitações e cuidados na interpretação
-- **Anotações de contexto histórico** (pandemia de COVID-19 destacada nos gráficos)
-- **Janela temporal padrão de 4 anos** (últimos 4 anos disponíveis), ajustável via filtro
+**Princípios do dashboard:**
+- **Texto antes de cada gráfico** — explica o que será analisado e qual é o insight principal
+- **Texto depois de cada gráfico** — interpreta os dados, explica as causas e destaca pontos críticos
+- **Insights automáticos** — pior ano, melhor ano, maior alta e maior queda calculados automaticamente dos dados
+- **Score de Risco 0–100** — Abandono EM (40%) + TDI (30%) + Reprovação EM (30%)
+- **Período padrão de 4 anos** (últimos 4 disponíveis), ajustável pelo usuário
+- **Glossário na barra lateral** com definições de todos os termos técnicos
+- **Seção de Machine Learning** — tabela de variáveis preditoras e placeholder para modelo futuro
 
-**Filtros disponíveis na barra lateral:**
-- Período de análise (slider de anos — padrão: últimos 4 anos)
+**Filtros disponíveis:**
+- Período de análise (slider — padrão: últimos 4 anos)
 - Nível de ensino (EF / EM)
-- Nível de risco para filtragem do ranking
 
-**Glossário de termos técnicos** (disponível na barra lateral do dashboard):
+**Glossário de termos** (também disponível na barra lateral do dashboard):
 
 | Termo | Definição |
 |---|---|
-| TDI | Taxa de Distorção Idade-Série: % de alunos com mais de 2 anos de atraso escolar |
-| p.p. | Ponto percentual: diferença absoluta entre duas taxas (ex.: de 10% para 12% = +2 p.p.) |
-| Abandono | Saída do aluno durante o ano letivo em curso |
-| Evasão | Saída definitiva do sistema de ensino |
+| Evasão escolar | Saída definitiva do aluno do sistema de ensino |
+| Abandono escolar | Saída do aluno durante o ano letivo em curso (precursor da evasão) |
+| TDI | Taxa de Distorção Idade-Série: % de alunos com mais de 2 anos de atraso em relação à série esperada |
+| p.p. | Ponto percentual: diferença direta entre dois percentuais (ex.: de 10% para 12% = +2 p.p.) |
 | ATU | Média de Alunos por Turma |
-| HAD | Horas-Aula Diárias |
 | EF | Ensino Fundamental (1º ao 9º ano) |
 | EM | Ensino Médio (1º ao 3º ano) |
+| Score de Risco | Indicador 0–100: Abandono EM (40%) + TDI EM (30%) + Reprovação EM (30%) |
 
 ---
 
 ## Principais Insights
 
-1. **Ensino Médio é 2–3× mais crítico** que o EF em todas as métricas de evasão
-2. **Repetência → TDI → Abandono → Evasão** formam uma cadeia causal identificável nos dados
-3. **Queda consistente** de 2008 a 2019; **retrocesso pós-pandemia** visível em 2021–2024
-4. Escolas com **turmas superlotadas** (ATU > 35) concentram maior taxa de abandono
-5. A **distorção idade-série** é o indicador mais fortemente correlacionado com evasão no EM
+1. **Ensino Médio é 2–3× mais crítico** que o EF — causas estruturais: pressão econômica, currículo percebido como distante e maior impacto de crises externas
+2. **Cadeia causal confirmada pelos dados:** Reprovação → TDI (defasagem escolar) → Abandono → Evasão definitiva. Qualquer intervenção que quebre essa cadeia reduz a evasão
+3. **Queda consistente de 2008 a 2019** — políticas educacionais e programas sociais produziram avanços reais; **pandemia de 2020–2021 reverteu parte desse progresso** em meses
+4. **TDI e taxa de abandono são os preditores mais fortes** da evasão — variáveis prioritárias para o modelo de Machine Learning
+5. **Recuperação pós-pandemia é lenta:** em 2022, os indicadores melhoraram, mas não retornaram ao nível pré-pandemia; os efeitos educacionais de uma crise dessa magnitude são de longo prazo
+
+### Variáveis prioritárias para modelagem preditiva
+
+| Variável | Importância estimada |
+|---|---|
+| Taxa de Abandono no EM | Muito Alta — precursor direto da evasão |
+| TDI — Distorção Idade-Série | Muito Alta — acumula histórico de defasagem |
+| Taxa de Reprovação no EM | Alta — origem da cadeia causal |
+| Taxa de Aprovação no EM | Alta — relação inversa forte com evasão |
+| Período histórico (pandemia) | Alta — variável de controle essencial |
 
 ---
 

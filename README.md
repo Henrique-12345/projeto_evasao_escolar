@@ -123,6 +123,18 @@ O pipeline em `etl/etl_pipeline.py` executa três etapas:
 
 ---
 
+## Integração das Bases de Dados
+
+As duas bases possuem granularidades diferentes: a base socioeconômica já vem com uma linha por ano, enquanto a base educacional tem uma linha por escola por ano — o que significa que um mesmo ano pode ter dezenas de registros, um para cada escola do município.
+
+Para que as duas possam ser analisadas juntas, o ETL executa dois passos. Primeiro, a base educacional é agregada por ano: todos os indicadores de cada escola (TDI, ATU, aprovação, reprovação, abandono) são calculados como a média entre todas as escolas do Recife naquele ano. Isso transforma os registros individuais por escola em um único valor representativo por ano. Segundo, as duas bases — agora ambas com uma linha por ano — são unidas por meio de um `INNER JOIN` usando o campo `ano` como chave. Isso significa que apenas os anos presentes nas duas fontes aparecem na tabela integrada final.
+
+O resultado é a tabela `fato_integrado`, que concentra em uma linha por ano todas as variáveis socioeconômicas (taxas de evasão, abandono, promoção, repetência) lado a lado com os indicadores educacionais agregados (TDI, ATU, HAD, aprovação, reprovação). A partir dessa tabela unificada, o ETL calcula também o **Índice de Risco de Evasão**: um score de 0 a 100 que combina evasão no Ensino Médio (peso 40%), distorção idade-série (peso 30%) e repetência no Ensino Médio (peso 30%).
+
+Vale destacar uma limitação dessa abordagem: ao agregar por média, perde-se a variabilidade entre escolas. Uma escola com 0% de abandono e outra com 40% resultam na média de 20%, sem que a dispersão fique visível na tabela integrada. Por isso, o ETL também mantém a tabela `fato_educacional` com os dados brutos por escola, que é utilizada no dashboard para análises de distribuição individuais.
+
+---
+
 ## Dashboard
 
 O dashboard é organizado como uma **narrativa em 5 seções**, projetada para comunicar insights de forma clara para qualquer pessoa — técnica ou não. Cada visualização é acompanhada de texto explicativo antes e depois do gráfico.

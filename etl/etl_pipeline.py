@@ -5,11 +5,16 @@ Etapas:
   1. EXTRACT  — lê os CSVs brutos
   2. TRANSFORM — limpa, enriquece e integra os dados
   3. LOAD      — salva em CSVs processados + banco SQLite
+
+Integração `fato_integrado`:
+  • Granularidade **escola–ano** (1 linha = 1 registro da base educacional em 1 ano).
+  • Indicadores socioeconômicos municipais são **replicados** por ano em todas as escolas.
+  • A série **município–ano** para gráficos agregados está em `dim_integrado_anual`.
 """
 
 import logging
-import os
 import sqlite3
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -19,9 +24,11 @@ import pandas as pd
 # Configuração
 # ---------------------------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
-RAW_DIR  = BASE_DIR / "data" / "raw"
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+RAW_DIR = BASE_DIR / "data" / "raw"
 PROC_DIR = BASE_DIR / "data" / "processed"
-DB_PATH  = PROC_DIR / "evasao_escolar.db"
+DB_PATH = PROC_DIR / "evasao_escolar.db"
 
 PROC_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -42,10 +49,10 @@ def extract() -> tuple[pd.DataFrame, pd.DataFrame]:
     log.info("EXTRACT — lendo arquivos brutos...")
 
     socio_path = RAW_DIR / "dados_socioeconomicos_recife.csv"
-    educ_path  = RAW_DIR / "dados_educacionais_recife.csv"
+    educ_path = RAW_DIR / "dados_educacionais_recife.csv"
 
     df_socio = pd.read_csv(socio_path)
-    df_educ  = pd.read_csv(educ_path)
+    df_educ = pd.read_csv(educ_path)
 
     log.info("  ✓ Socioeconômico: %d linhas × %d colunas", *df_socio.shape)
     log.info("  ✓ Educacional   : %d linhas × %d colunas", *df_educ.shape)
@@ -58,7 +65,7 @@ def extract() -> tuple[pd.DataFrame, pd.DataFrame]:
 # ===========================================================================
 
 def _limpar_base(df: pd.DataFrame, nome: str) -> pd.DataFrame:
-    """Limpeza genérica aplicada em ambas as bases."""
+    """Limpeza genérica aplicada a ambas as bases."""
     n_antes = len(df)
 
     df = df.drop_duplicates().copy()
@@ -82,12 +89,55 @@ def _limpar_base(df: pd.DataFrame, nome: str) -> pd.DataFrame:
 
 
 def _criar_nivel_risco(taxa: pd.Series, limites=(5, 10, 20)) -> pd.Series:
-    """Classifica a taxa de abandono/evasão em níveis de risco."""
-    return pd.cut(
-        taxa,
-        bins=[-np.inf, limites[0], limites[1], limites[2], np.inf],
-        labels=["Baixo", "Moderado", "Alto", "Crítico"],
-    )
+    """
+    Classifica a taxa de abandono em níveis de risco.
+    Ausentes não são tratados como zero — recebem rótulo explícito ``Sem dado``.
+    """
+    out = pd.Series(pd.NA, index=taxa.index, dtype="object")
+    mask = taxa.notna()
+    if mask.any():
+        out.loc[mask] = pd.cut(
+            taxa.loc[mask],
+            bins=[-np.inf, limites[0], limites[1], limites[2], np.inf],
+            labels=["Baixo", "Moderado", "Alto", "Crítico"],
+        ).astype(str)
+    out.loc[~mask] = "Sem dado"
+    return out
+
+
+def _periodo(ano: int) -> str:
+    if ano <= 2010:
+        return "2006–2010"
+    if ano <= 2015:
+        return "2011–2015"
+    if ano <= 2019:
+        return "2016–2019"
+    if ano <= 2022:
+        return "2020–2022 (Pandemia)"
+    return "2023–2024"
+
+
+def _indice_risco_evasao(df: pd.DataFrame) -> pd.Series:
+    """
+    Índice 0–100: média ponderada de evasão EM, TDI EM e repetência EM.
+    Componentes ausentes são ignorados e os pesos são **renormalizados** sobre os
+    disponíveis (não se assume 0 implícito).
+    """
+    spec = {
+        "taxa_evasao_em": 0.40,
+        "tdi_em": 0.30,
+        "taxa_repetencia_em": 0.30,
+    }
+    cols = [c for c in spec if c in df.columns]
+    if not cols:
+        return pd.Series(np.nan, index=df.index)
+    M = df[cols].to_numpy(dtype=float)
+    w = np.array([spec[c] for c in cols], dtype=float)
+    mask = np.isfinite(M) & ~np.isnan(M)
+    numer = (np.where(mask, M, 0.0) * w.reshape(1, -1)).sum(axis=1)
+    denom = (w.reshape(1, -1) * mask).sum(axis=1)
+    score = np.divide(numer, denom, out=np.full(len(df), np.nan), where=denom > 0)
+    return pd.Series(np.clip(score, 0, 100), index=df.index).round(2)
 
 
 def transform(df_socio: pd.DataFrame, df_educ: pd.DataFrame) -> dict[str, pd.DataFrame]:
@@ -97,113 +147,135 @@ def transform(df_socio: pd.DataFrame, df_educ: pd.DataFrame) -> dict[str, pd.Dat
     """
     log.info("TRANSFORM — iniciando...")
 
-    # ------------------------------------------------------------------
-    # Limpeza
-    # ------------------------------------------------------------------
     df_socio = _limpar_base(df_socio, "socioeconomico")
-    df_educ  = _limpar_base(df_educ,  "educacional")
-
-    # ------------------------------------------------------------------
-    # Classificação por período histórico
-    # ------------------------------------------------------------------
-    def periodo(ano):
-        if ano <= 2010:   return "2006–2010"
-        elif ano <= 2015: return "2011–2015"
-        elif ano <= 2019: return "2016–2019"
-        elif ano <= 2022: return "2020–2022 (Pandemia)"
-        else:             return "2023–2024"
+    df_educ = _limpar_base(df_educ, "educacional")
 
     df_socio = df_socio.copy()
-    df_educ  = df_educ.copy()
-    df_socio["periodo"] = df_socio["ano"].map(periodo)
-    df_educ["periodo"]  = df_educ["ano"].map(periodo)
+    df_educ = df_educ.copy()
+    df_socio["periodo"] = df_socio["ano"].map(_periodo)
+    df_educ["periodo"] = df_educ["ano"].map(_periodo)
 
-    # ------------------------------------------------------------------
-    # Nível de risco na base educacional
-    # ------------------------------------------------------------------
+    # Identificador estável por linha da base educacional (extrato sem código INEP de escola)
+    df_educ = df_educ.sort_values(["ano", "id_municipio"], kind="mergesort").reset_index(drop=True)
+    df_educ["id_linha_educacional"] = np.arange(len(df_educ), dtype=np.int64)
+
     for col in ["taxa_abandono_ef", "taxa_abandono_em"]:
         if col in df_educ.columns:
-            df_educ[f"risco_{col.replace('taxa_abandono_', '')}"] = _criar_nivel_risco(
-                df_educ[col].fillna(0)
-            )
+            suf = col.replace("taxa_abandono_", "")
+            df_educ[f"risco_{suf}"] = _criar_nivel_risco(df_educ[col])
 
-    # ------------------------------------------------------------------
-    # Tabelas agregadas por ano (média entre escolas)
-    # ------------------------------------------------------------------
-    cols_excluir = ["id_municipio", "id_municipio_nome", "periodo"]
+    cols_excluir_agg = ["id_municipio", "id_municipio_nome", "periodo"]
 
+    # --- Série municipal: uma linha por ano (taxas socio + médias educacionais) ---
     socio_anual = (
-        df_socio.drop(columns=cols_excluir)
+        df_socio.drop(columns=[c for c in cols_excluir_agg if c in df_socio.columns])
         .groupby("ano", as_index=False)
-        .mean()
+        .mean(numeric_only=True)
         .round(2)
     )
-    socio_anual["periodo"] = socio_anual["ano"].map(periodo)
+    socio_anual["periodo"] = socio_anual["ano"].map(_periodo)
+    socio_anual["id_municipio"] = socio_anual["ano"].map(
+        df_socio.groupby("ano")["id_municipio"].first()
+    )
 
+    drop_educ = [
+        c
+        for c in cols_excluir_agg + ["risco_ef", "risco_em", "id_linha_educacional"]
+        if c in df_educ.columns
+    ]
     educ_anual = (
-        df_educ.drop(columns=[c for c in cols_excluir + ["risco_ef", "risco_em"] if c in df_educ.columns])
+        df_educ.drop(columns=drop_educ, errors="ignore")
         .groupby("ano", as_index=False)
-        .mean()
+        .mean(numeric_only=True)
         .round(2)
     )
-    educ_anual["periodo"] = educ_anual["ano"].map(periodo)
+    educ_anual["periodo"] = educ_anual["ano"].map(_periodo)
 
-    # ------------------------------------------------------------------
-    # Base integrada (JOIN por ano)
-    # ------------------------------------------------------------------
-    df_merged = pd.merge(
-        socio_anual, educ_anual,
+    dim_integrado_anual = pd.merge(
+        socio_anual,
+        educ_anual,
         on=["ano", "periodo"],
         how="inner",
         suffixes=("_socio", "_educ"),
     )
+    dim_integrado_anual["indice_risco_evasao"] = _indice_risco_evasao(dim_integrado_anual)
 
-    # Indicador composto: Índice de Risco de Evasão (0–100)
-    #   Combina evasão EM (peso 40%), TDI EM (peso 30%), repetência EM (30%)
-    cols_ire = {
-        "taxa_evasao_em":   0.40,
-        "tdi_em":           0.30,
-        "taxa_repetencia_em": 0.30,
-    }
-    cols_ire_existentes = {c: w for c, w in cols_ire.items() if c in df_merged.columns}
-    if cols_ire_existentes:
-        df_merged["indice_risco_evasao"] = sum(
-            df_merged[c].fillna(0) * w for c, w in cols_ire_existentes.items()
-        ).round(2)
+    n_anos_integrados = len(dim_integrado_anual)
+    shape_antigo_integrado = (n_anos_integrados, dim_integrado_anual.shape[1])
 
-    log.info("  ✓ Base integrada: %d anos × %d variáveis", *df_merged.shape)
+    # --- Taxas municipais por ano (uma linha/ano) para join com a base escola–ano ---
+    taxas_socio = [c for c in socio_anual.columns if c.startswith("taxa_")]
+    socio_por_ano = socio_anual[["ano"] + taxas_socio].drop_duplicates(subset=["ano"])
 
-    # ------------------------------------------------------------------
-    # Tabela de escolas com risco crítico (nível micro)
-    # ------------------------------------------------------------------
-    escolas_risco = df_educ[
-        (df_educ["taxa_abandono_em"].fillna(0) >= 10) |
-        (df_educ["taxa_abandono_ef"].fillna(0) >= 5)
-    ].copy()
+    # --- Integração escola–ano (sem agregar a base educacional) ---
+    fato_integrado = df_educ.merge(
+        socio_por_ano,
+        on="ano",
+        how="inner",
+        validate="many_to_one",
+        suffixes=("", "_socio"),
+    )
+
+    # Remove colunas duplicadas por sufixo se o merge criou
+    dup_cols = [c for c in fato_integrado.columns if c.endswith("_socio")]
+    if dup_cols:
+        fato_integrado = fato_integrado.drop(columns=dup_cols)
+
+    fato_integrado["indice_risco_evasao"] = _indice_risco_evasao(fato_integrado)
+
+    # Consistência e duplicatas
+    n_dup_linhas = int(fato_integrado.duplicated().sum())
+    if n_dup_linhas:
+        log.warning("  [!] Linhas completamente duplicadas em fato_integrado: %d — removendo.", n_dup_linhas)
+        fato_integrado = fato_integrado.drop_duplicates().reset_index(drop=True)
+
+    n_unicos_id = fato_integrado["id_linha_educacional"].nunique()
+    if n_unicos_id != len(fato_integrado):
+        log.warning(
+            "  [!] id_linha_educacional não é único por linha — verifique duplicatas na base bruta."
+        )
+
+    log.info(
+        "  ✓ Comparativo granularidade: integração **antiga** (município–ano) ≈ shape %s → "
+        "**nova** `fato_integrado` (escola–ano) shape %s",
+        shape_antigo_integrado,
+        fato_integrado.shape,
+    )
+    log.info(
+        "  ✓ Amostras ML (`fato_integrado`): %d linhas | anos distintos: %d | ids educacionais únicos: %d",
+        len(fato_integrado),
+        fato_integrado["ano"].nunique(),
+        n_unicos_id,
+    )
+    log.info("  ✓ dim_integrado_anual (município–ano para séries): %d anos", len(dim_integrado_anual))
+
+    em_crit = df_educ["taxa_abandono_em"].notna() & (df_educ["taxa_abandono_em"] >= 10)
+    ef_crit = df_educ["taxa_abandono_ef"].notna() & (df_educ["taxa_abandono_ef"] >= 5)
+    escolas_risco = df_educ[em_crit | ef_crit].copy()
     escolas_risco = escolas_risco.sort_values(
         ["taxa_abandono_em", "taxa_abandono_ef"], ascending=False
     )
     log.info("  ✓ Escolas em risco: %d registros", len(escolas_risco))
 
-    # ------------------------------------------------------------------
-    # Tendências: variação percentual ano a ano
-    # ------------------------------------------------------------------
-    tendencia = df_merged[["ano"]].copy()
+    tendencia = dim_integrado_anual[["ano"]].copy()
     for col in ["taxa_evasao_em", "taxa_abandono_em", "tdi_em", "indice_risco_evasao"]:
-        if col in df_merged.columns:
-            tendencia[col] = df_merged[col]
-            tendencia[f"var_{col}"] = df_merged[col].pct_change(fill_method=None).mul(100).round(2)
+        if col in dim_integrado_anual.columns:
+            tendencia[col] = dim_integrado_anual[col].values
+            tendencia[f"var_{col}"] = (
+                dim_integrado_anual[col].pct_change(fill_method=None).mul(100).round(2)
+            )
 
     log.info("TRANSFORM — concluído.")
 
     return {
-        "fato_socioeconomico":    df_socio,
-        "fato_educacional":       df_educ,
-        "dim_socio_anual":        socio_anual,
-        "dim_educ_anual":         educ_anual,
-        "fato_integrado":         df_merged,
-        "escolas_risco":          escolas_risco,
-        "tendencia_anual":        tendencia,
+        "fato_socioeconomico": df_socio,
+        "fato_educacional": df_educ,
+        "dim_socio_anual": socio_anual,
+        "dim_educ_anual": educ_anual,
+        "dim_integrado_anual": dim_integrado_anual,
+        "fato_integrado": fato_integrado,
+        "escolas_risco": escolas_risco,
+        "tendencia_anual": tendencia,
     }
 
 
@@ -216,7 +288,6 @@ def _salvar_sqlite(tabelas: dict[str, pd.DataFrame], db_path: Path) -> None:
     conn = sqlite3.connect(db_path)
     for nome, df in tabelas.items():
         df_save = df.copy()
-        # Converte colunas categóricas para string antes de salvar
         for col in df_save.select_dtypes(include="category").columns:
             df_save[col] = df_save[col].astype(str)
         df_save.to_sql(nome, conn, if_exists="replace", index=False)
@@ -251,8 +322,18 @@ def run_etl() -> dict[str, pd.DataFrame]:
     log.info("=" * 55)
 
     df_socio, df_educ = extract()
+    socio_bruto = df_socio.copy()
+    educ_bruto = df_educ.copy()
     tabelas = transform(df_socio, df_educ)
     load(tabelas)
+
+    try:
+        from etl.missing_report import save_missing_report
+
+        path_rep = save_missing_report(socio_bruto, educ_bruto, tabelas, logger=log)
+        log.info("  ✓ Relatório de ausentes → %s", path_rep)
+    except Exception as exc:
+        log.warning("  [!] Relatório de ausentes não gerado: %s", exc)
 
     log.info("=" * 55)
     log.info("  ETL FINALIZADO COM SUCESSO")

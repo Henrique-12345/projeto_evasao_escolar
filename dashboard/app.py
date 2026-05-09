@@ -53,6 +53,7 @@ CORES_RISCO = {
     "Alto":     "#DC2626",
     "Moderado": "#B45309",
     "Baixo":    "#15803D",
+    "Sem dado": "#94A3B8",
 }
 
 PALETA_PERIODO = {
@@ -76,7 +77,9 @@ GLOSSARIO = {
     "EF":                    "Ensino Fundamental — do 1.º ao 9.º ano.",
     "EM":                    "Ensino Médio — do 1.º ao 3.º ano.",
     "ATU":                   "Média de Alunos por Turma.",
-    "Score de Risco":        "Indicador de 0 a 100 calculado como: Abandono EM (40%) + TDI EM (30%) + Reprovação EM (30%). Quanto maior o score, maior o risco de evasão.",
+    "Score de Risco":        "Indicador de 0 a 100: pesos 40% abandono EM, 30% TDI EM, 30% reprovação EM. Se algum componente estiver ausente, os pesos são renormalizados sobre os disponíveis (não se assume zero). Quanto maior o score, maior o risco.",
+    "Sem dado":               "Indicador ou taxa não disponível na base para aquele registro — não equivale a valor zero nas classificações de risco.",
+    "Modelo baseline (ML)":   "Regressão supervisionada em `fato_integrado`: alvo `taxa_abandono_em` (escola–ano); evasão municipal entra como contexto. Ver `docs/definicao_problema_e_escopo.md`.",
     "EJA":                   "Educação de Jovens e Adultos — modalidade para quem não concluiu o ensino regular na idade prevista.",
 }
 
@@ -96,24 +99,55 @@ def garantir_dados():
             run_etl()
         st.cache_data.clear()
 
+
+def tabela_municipio_ano(dados: dict) -> pd.DataFrame:
+    """
+    Séries agregadas **município–ano** (uma linha por ano).
+    Usada em KPIs e gráficos temporais; os dados socioeconômicos são municipais
+    e, na base escola–ano, apenas replicados por escola.
+    """
+    if dados.get("dim_integrado_anual") is not None and not dados["dim_integrado_anual"].empty:
+        return dados["dim_integrado_anual"].sort_values("ano").reset_index(drop=True)
+    s = dados.get("dim_socio_anual")
+    e = dados.get("dim_educ_anual")
+    if s is None or e is None or s.empty or e.empty:
+        return pd.DataFrame()
+    chaves = [c for c in ["ano", "periodo"] if c in s.columns and c in e.columns]
+    if not chaves:
+        return pd.DataFrame()
+    return s.merge(e, on=chaves, how="inner", suffixes=("_socio", "_educ")).sort_values("ano").reset_index(drop=True)
+
 # ---------------------------------------------------------------------------
 # Score de risco
 # ---------------------------------------------------------------------------
 def calcular_score(df: pd.DataFrame) -> pd.Series:
-    def col(c): return df[c].fillna(0) if c in df.columns else pd.Series(0.0, index=df.index)
-    s = col("taxa_abandono_em") * 0.40 + col("tdi_em") * 0.30 + col("taxa_reprovacao_em") * 0.30
-    mask = df["taxa_abandono_em"].notna() if "taxa_abandono_em" in df.columns else pd.Series(False, index=df.index)
-    result = pd.Series(np.nan, index=df.index)
-    result[mask] = s[mask].clip(0, 100)
-    return result.round(1)
+    """
+    Score 0–100 (dashboard): abandono EM + TDI + reprovação EM.
+    Pesos renormalizados quando algum componente está ausente (sem assumir 0).
+    """
+    spec = {"taxa_abandono_em": 0.40, "tdi_em": 0.30, "taxa_reprovacao_em": 0.30}
+    cols = [c for c in spec if c in df.columns]
+    if not cols:
+        return pd.Series(np.nan, index=df.index)
+    M = df[cols].to_numpy(dtype=float)
+    w = np.array([spec[c] for c in cols], dtype=float)
+    mask = np.isfinite(M) & ~np.isnan(M)
+    numer = (np.where(mask, M, 0.0) * w.reshape(1, -1)).sum(axis=1)
+    denom = (w.reshape(1, -1) * mask).sum(axis=1)
+    out = np.divide(numer, denom, out=np.full(len(df), np.nan), where=denom > 0)
+    return pd.Series(np.clip(out, 0, 100), index=df.index).round(1)
 
 
 def classificar_risco(score: pd.Series) -> pd.Series:
-    return pd.cut(
+    """Bins de risco; valores ausentes no score → 'Sem dado' (evita cortes com 0 implícito)."""
+    binned = pd.cut(
         score,
         bins=[-np.inf, LIMIARES["baixo"], LIMIARES["moderado"], LIMIARES["alto"], np.inf],
         labels=["Baixo", "Moderado", "Alto", "Critico"],
-    ).astype(str)
+    )
+    out = binned.astype(object)
+    out[score.isna()] = "Sem dado"
+    return out.astype(str)
 
 # ---------------------------------------------------------------------------
 # Insights automáticos
@@ -121,7 +155,7 @@ def classificar_risco(score: pd.Series) -> pd.Series:
 def computar_insights(dados: dict) -> dict:
     """Calcula métricas globais uma única vez para todos os gráficos."""
     s  = dados["dim_socio_anual"].sort_values("ano")
-    fi = dados["fato_integrado"].sort_values("ano")
+    fi = tabela_municipio_ano(dados)
     out = {}
 
     if "taxa_evasao_em" in s.columns:
@@ -137,7 +171,7 @@ def computar_insights(dados: dict) -> dict:
             out["val_fim"]     = round(em.iloc[-1]["taxa_evasao_em"], 1)
             out["delta_total"] = round(out["val_fim"] - out["val_ini"], 1)
 
-    if "indice_risco_evasao" in fi.columns:
+    if not fi.empty and "indice_risco_evasao" in fi.columns:
         ri = fi.dropna(subset=["indice_risco_evasao"])
         if not ri.empty:
             out["score_atual"] = round(ri.iloc[-1]["indice_risco_evasao"], 1)
@@ -252,6 +286,30 @@ def sidebar(dados: dict) -> dict:
             st.caption(defn)
 
     st.sidebar.divider()
+    with st.sidebar.expander("Qualidade dos dados e valores ausentes"):
+        st.markdown(
+            "- O **ETL** preserva `NaN` onde não há valor observado; não há imputação genérica nas tabelas exportadas.\n"
+            "- O **índice de risco** e o **score do painel** usam **pesos renormalizados** se abandono, TDI ou reprovação estiverem ausentes — não se trata ausência como zero.\n"
+            "- Na **modelagem**, `SimpleImputer` (mediana / mais frequente) fica **dentro do Pipeline sklearn** e é ajustado **somente no treino**, evitando vazamento para o teste.\n"
+            "- Relatório automático após o ETL: `outputs/relatorio_missing_values.csv` e figuras em `outputs/figures/`.\n"
+            "- Documentação: `docs/politica_dados_ausentes.md`."
+        )
+        path_miss = ROOT / "outputs" / "relatorio_missing_values.csv"
+        if path_miss.exists():
+            try:
+                txt = path_miss.read_text(encoding="utf-8-sig")
+                if "# RESUMO_GLOBAL" in txt:
+                    block = txt.split("# RESUMO_GLOBAL", 1)[1]
+                    if "# RESUMO_FORMAS" in block:
+                        block = block.split("# RESUMO_FORMAS", 1)[0].strip()
+                    elif "# DETALHE_POR_COLUNA" in block:
+                        block = block.split("# DETALHE_POR_COLUNA", 1)[0].strip()
+                    st.caption("Trecho do relatório de ausentes (resumo global):")
+                    st.code(block[:1200] + ("..." if len(block) > 1200 else ""), language=None)
+            except Exception:
+                pass
+
+    st.sidebar.divider()
     if st.sidebar.button("Reprocessar dados (ETL)"):
         st.cache_data.clear()
         sys.path.insert(0, str(ROOT))
@@ -269,7 +327,7 @@ def pagina_contexto(dados: dict, filtros: dict, ins: dict):
     st.markdown("# A Evasao Escolar em Recife — Contexto Geral")
 
     a1, a2 = filtros["ano_range"]
-    df = dados["fato_integrado"].copy()
+    df = tabela_municipio_ano(dados).copy()
     df = df[(df["ano"] >= a1) & (df["ano"] <= a2)].sort_values("ano")
 
     if df.empty:
@@ -443,7 +501,7 @@ def pagina_contexto(dados: dict, filtros: dict, ins: dict):
                 fig_t.add_trace(go.Scatter(
                     x=dt["ano"], y=dt["indice_risco_evasao"],
                     mode="lines+markers+text",
-                    text=dt["indice_risco_evasao"].round(0).fillna(0).astype(int),
+                    text=["" if pd.isna(v) else str(int(round(v))) for v in dt["indice_risco_evasao"]],
                     textposition="top center",
                     line=dict(color=COR_PRIMARIA, width=3),
                     marker=dict(size=9, color=dt["indice_risco_evasao"],
@@ -537,7 +595,7 @@ def pagina_evolucao(dados: dict, filtros: dict, ins: dict):
     a1, a2    = filtros["ano_range"]
     df_soc    = dados["dim_socio_anual"].copy()
     df_educ   = dados["dim_educ_anual"].copy()
-    df_int    = dados["fato_integrado"].copy()
+    df_int    = tabela_municipio_ano(dados).copy()
     tend      = dados["tendencia_anual"].copy()
     show_ef   = "Ensino Fundamental (EF)" in filtros["nivel"]
     show_em   = "Ensino Medio (EM)"        in filtros["nivel"]
@@ -680,8 +738,8 @@ def pagina_evolucao(dados: dict, filtros: dict, ins: dict):
         "Esse dado e importante: as politicas para os dois niveis precisam ser diferentes.",
     )
 
-    if all(c in df_int.columns for c in ["taxa_evasao_ef", "taxa_evasao_em"]):
-        dc = df_int.dropna(subset=["taxa_evasao_ef", "taxa_evasao_em"]).sort_values("ano").copy()
+    if all(c in df_soc.columns for c in ["taxa_evasao_ef", "taxa_evasao_em"]):
+        dc = df_soc.dropna(subset=["taxa_evasao_ef", "taxa_evasao_em"]).sort_values("ano").copy()
         dc = dc[dc["taxa_evasao_ef"] > 0]
         if not dc.empty:
             dc["razao"] = (dc["taxa_evasao_em"] / dc["taxa_evasao_ef"]).round(2)
@@ -825,7 +883,7 @@ def pagina_pandemia(dados: dict, filtros: dict, ins: dict):
     st.divider()
 
     # ── Score antes, durante e depois da pandemia ──────────────────────────────
-    df_fi = dados["fato_integrado"].copy().sort_values("ano")
+    df_fi = tabela_municipio_ano(dados).sort_values("ano")
 
     pre_grafico(
         "Como o risco de evasao se comportou antes, durante e apos a pandemia?",
@@ -848,7 +906,7 @@ def pagina_pandemia(dados: dict, filtros: dict, ins: dict):
         fig_p.add_trace(go.Scatter(
             x=dt["ano"], y=dt["indice_risco_evasao"],
             mode="lines+markers+text",
-            text=dt["indice_risco_evasao"].round(0).fillna(0).astype(int),
+            text=["" if pd.isna(v) else str(int(round(v))) for v in dt["indice_risco_evasao"]],
             textposition="top center",
             line=dict(color=COR_PRIMARIA, width=3),
             marker=dict(
@@ -897,7 +955,7 @@ def pagina_pandemia(dados: dict, filtros: dict, ins: dict):
 
     df_soc   = dados["dim_socio_anual"].copy()
     df_educ_  = dados["dim_educ_anual"].copy()
-    df_fi_    = dados["fato_integrado"].copy()
+    df_fi_    = tabela_municipio_ano(dados).copy()
 
     comparacoes = []
     for col_v, label, fonte in [
@@ -965,7 +1023,7 @@ def pagina_relacoes(dados: dict, filtros: dict, ins: dict):
 
     a1, a2   = filtros["ano_range"]
     df_socio = dados["dim_socio_anual"][(dados["dim_socio_anual"]["ano"].between(a1, a2))].copy()
-    df_int   = dados["fato_integrado"][(dados["fato_integrado"]["ano"].between(a1, a2))].copy()
+    df_escola = dados["fato_integrado"][(dados["fato_integrado"]["ano"].between(a1, a2))].copy()
 
     # ── Cadeia causal ──────────────────────────────────────────────────────────
     st.markdown("### A cadeia que leva a evasao")
@@ -1062,10 +1120,11 @@ ainda mais dificuldade no ensino remoto e muitos optaram por trabalhar.
             "O TDI — Taxa de Distorcao Idade-Serie — mede quantos alunos estao cursando "
             "uma serie abaixo do esperado para sua idade. "
             "Um aluno mais velho que os colegas sente-se deslocado e desiste mais facilmente. "
-            "Cada ponto e um ano; a linha tracejada mostra a tendencia.",
+            "Cada ponto representa uma escola em um ano (microrregiao municipal); "
+            "a linha tracejada mostra a tendencia.",
         )
-        if all(c in df_int.columns for c in ["tdi_em", "taxa_abandono_em"]):
-            s2 = df_int.dropna(subset=["tdi_em", "taxa_abandono_em"])
+        if all(c in df_escola.columns for c in ["tdi_em", "taxa_abandono_em"]):
+            s2 = df_escola.dropna(subset=["tdi_em", "taxa_abandono_em"])
             if len(s2) >= 3:
                 fig2 = go.Figure()
                 result2 = scatter_tendencia(fig2, s2["tdi_em"].values, s2["taxa_abandono_em"].values,
@@ -1105,10 +1164,13 @@ ainda mais dificuldade no ensino remoto e muitos optaram por trabalhar.
         "Indicadores acima do limite aceitavel exigem atencao ou acao imediata."
     )
 
-    if not df_int.empty:
-        ultimo = df_int.sort_values("ano").iloc[-1]
-        ano_ref = int(ultimo["ano"])
-        st.caption(f"Ano de referencia: {ano_ref}.")
+    df_ref_diag = tabela_municipio_ano(dados)
+    if not df_ref_diag.empty:
+        df_ref_diag = df_ref_diag[df_ref_diag["ano"].between(a1, a2)].sort_values("ano")
+
+    if not df_ref_diag.empty:
+        ultimo = df_ref_diag.iloc[-1]
+        st.caption(f"Ano de referencia: {int(ultimo['ano'])}.")
 
         fatores = []
         def av(col, label, lim_a, lim_c, ref_txt):
@@ -1171,7 +1233,7 @@ ainda mais dificuldade no ensino remoto e muitos optaram por trabalhar.
         "taxa_evasao_em", "taxa_abandono_em", "taxa_repetencia_em",
         "taxa_reprovacao_em", "tdi_em", "taxa_aprovacao_em",
         "taxa_promocao_em", "taxa_evasao_ef", "taxa_abandono_ef", "tdi_ef",
-    ] if c in df_int.columns]
+    ] if c in df_escola.columns]
 
     nomes = {
         "taxa_evasao_em":     "Evasao EM",
@@ -1186,7 +1248,7 @@ ainda mais dificuldade no ensino remoto e muitos optaram por trabalhar.
         "tdi_ef":             "TDI — Defasagem EF",
     }
 
-    df_c = df_int[[c for c in cols_c if c in df_int.columns]].dropna(how="all").rename(columns=nomes)
+    df_c = df_escola[[c for c in cols_c if c in df_escola.columns]].dropna(how="all").rename(columns=nomes)
     if len(df_c) >= 3:
         corr = df_c.corr()
         col_m, col_r = st.columns([3, 2])
@@ -1225,9 +1287,8 @@ ainda mais dificuldade no ensino remoto e muitos optaram por trabalhar.
                 "info",
             )
         st.warning(
-            f"O mapa e calculado com {len(df_c)} pontos de dados (anos). "
-            "Com menos de 10 pontos, os resultados indicam tendencias e nao sao estatisticamente definitivos. "
-            "Ampliar o periodo melhora a confiabilidade da analise."
+            f"O mapa e calculado com {len(df_c)} observacoes (escola–ano no periodo). "
+            "Correlacoes em nivel micro sao informativas, mas interpretacao causal exige cautela."
         )
     else:
         st.warning("Dados insuficientes para o mapa de correlacao. Amplie o periodo de analise.")
@@ -1245,13 +1306,13 @@ def pagina_conclusoes(dados: dict, filtros: dict, ins: dict):
     st.markdown("# Conclusoes, Insights e Base para Machine Learning")
     st.write(
         "Esta secao consolida os principais aprendizados do dashboard e prepara o terreno "
-        "para a etapa de modelagem preditiva. "
-        "O objetivo final e construir um modelo capaz de antecipar o risco de evasao "
-        "antes que ele se concretize."
+        "para a etapa de modelagem supervisionada. "
+        "No baseline implementado, estima-se a **taxa de abandono no Ensino Medio** por escola–ano "
+        "como indicador associado ao risco de evasao; as series municipais de evasao "
+        "continuam a contextualizar o cenario da cidade."
     )
 
     a1, a2 = filtros["ano_range"]
-    df_int  = dados["fato_integrado"][(dados["fato_integrado"]["ano"].between(a1, a2))].copy()
 
     # ── Insights consolidados ──────────────────────────────────────────────────
     st.markdown("### Os 5 principais insights dos dados")
@@ -1289,11 +1350,11 @@ def pagina_conclusoes(dados: dict, filtros: dict, ins: dict):
             "impacta diretamente a evasao."
         )
         st.info(
-            "**5. A evasao pode ser prevista antes de acontecer.**\n\n"
+            "**5. Padroes na cadeia permitem monitoramento preventivo.**\n\n"
             "A existencia de uma cadeia causal clara — reprovacao, TDI, abandono, evasao — "
-            "significa que e possivel identificar alunos em risco antes que deixem a escola. "
-            "Um modelo preditivo que monitore esses indicadores continuamente "
-            "permitiria intervencoes preventivas muito mais eficazes e baratas."
+            "significa que indicadores de fluxo podem sinalizar risco antes da evasao definitiva. "
+            "No baseline de regressao (escola–ano), o **abandono no EM** e o alvo formal; "
+            "a evasao municipal continua descrita nas series do painel."
         )
 
     st.divider()
@@ -1302,7 +1363,8 @@ def pagina_conclusoes(dados: dict, filtros: dict, ins: dict):
     st.markdown("### Quais variaveis sao os melhores preditores para um modelo de Machine Learning?")
     st.write(
         "Com base nas analises deste dashboard, as variaveis abaixo apresentam maior "
-        "potencial para prever a evasao escolar. "
+        "potencial para explicar variacao na taxa de abandono no EM e, por arraste, "
+        "no risco associado a evasao escolar (series municipais de evasao seguem no diagnostico geral). "
         "Esta tabela serve como guia para a construcao do modelo preditivo."
     )
 
@@ -1363,8 +1425,12 @@ def pagina_conclusoes(dados: dict, filtros: dict, ins: dict):
         "Acoes de longo prazo constroem a resistencia estrutural do sistema."
     )
 
-    if not df_int.empty:
-        ultimo = df_int.sort_values("ano").iloc[-1]
+    df_ref_acao = tabela_municipio_ano(dados)
+    if not df_ref_acao.empty:
+        df_ref_acao = df_ref_acao[df_ref_acao["ano"].between(a1, a2)].sort_values("ano")
+
+    if not df_ref_acao.empty:
+        ultimo = df_ref_acao.iloc[-1]
         ab  = float(ultimo.get("taxa_abandono_em", 0) or 0)
         tdi = float(ultimo.get("tdi_em", 0) or 0)
         rep = float(ultimo.get("taxa_repetencia_em", 0) or 0)
@@ -1424,10 +1490,10 @@ def pagina_conclusoes(dados: dict, filtros: dict, ins: dict):
         dict(urgencia="LONGO PRAZO",
              titulo="Implantar modelo preditivo de risco de evasao por aluno",
              descricao=(
-                 "As analises deste dashboard mostram que a evasao e previsivel. "
-                 "Um modelo de Machine Learning treinado com os dados disponíveis "
-                 "poderia identificar alunos em risco meses antes do abandono, "
-                 "permitindo intervencoes preventivas muito mais eficazes e baratas."
+                 "As analises deste dashboard mostram padroes estaveis na cadeia reprovacao–TDI–abandono–evasao. "
+                 "Um modelo de regressao (alvo: abandono EM por escola–ano, como no notebook de modelagem) "
+                 "poderia priorizar escolas com maior erro de predicao nas covariaveis disponiveis "
+                 "e apoiar monitoramento preventivo."
              ),
              indicador="A cadeia causal identificada nos dados viabiliza a modelagem preditiva"),
     ]
@@ -1449,16 +1515,17 @@ def pagina_conclusoes(dados: dict, filtros: dict, ins: dict):
     st.divider()
 
     # ── Placeholder para modelo preditivo ─────────────────────────────────────
-    st.markdown("### [Em desenvolvimento] — Modelo Preditivo de Risco de Evasao")
+    st.markdown("### [Em desenvolvimento] — Modelo regressao abandono EM (indicador de risco de evasao)")
     st.info(
         "**O que sera adicionado aqui:**\n\n"
-        "Um modelo de Machine Learning treinado com os dados historicos de Recife para:\n\n"
-        "- Estimar a probabilidade de evasao nos proximos anos com base nas variaveis atuais\n"
-        "- Identificar automaticamente os grupos de alunos mais vulneraveis\n"
-        "- Simular o impacto de intervencoes especificas (ex: 'se a reprovacao cair 2 p.p., "
-        "a evasao deve cair X p.p.')\n\n"
+        "Um modelo de regressao supervisionada treinado com os dados historicos de Recife para:\n\n"
+        "- Estimar a **taxa de abandono no EM** em nivel escola–ano (alinhado ao notebook `modelagem_evasao_municipio`) "
+        "como indicador associado ao risco de evasao\n"
+        "- Identificar escolas / anos com maior erro de predicao nas covariaveis disponiveis\n"
+        "- Simular cenarios de politica (ex.: se a reprovacao cair X p.p., como reage o abandono previsto)\n\n"
         "**As variaveis prioritarias para o modelo**, com base neste dashboard:\n"
-        "TDI, taxa de abandono, taxa de reprovacao, taxa de aprovacao e periodo historico.\n\n"
+        "TDI, taxa de abandono, taxa de reprovacao, taxa de aprovacao e periodo historico "
+        "(evasao municipal pode entrar como contexto no `fato_integrado`).\n\n"
         "**Por enquanto**, o Score de Risco calculado manualmente (disponivel na barra lateral) "
         "serve como aproximacao do que o modelo fara de forma mais precisa e automatizada."
     )

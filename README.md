@@ -20,12 +20,21 @@ projeto_evasao_escolar/
 ├── data/
 │   ├── raw/                     # CSVs originais (não versionados)
 │   └── processed/               # Dados gerados pelo ETL (não versionados)
+├── docs/
+│   ├── definicao_problema_e_escopo.md   # Problema de ML: alvo abandono EM × granularidade escola–ano
+│   ├── plano_tecnico_dados.md
+│   └── politica_dados_ausentes.md
 ├── etl/
 │   └── etl_pipeline.py          # Pipeline ETL: Extract → Transform → Load
+├── ml/
+│   └── baseline_municipio.py    # Pipeline sklearn + baseline Ridge + análise de impacto de ausentes
+├── notebooks/
+│   ├── modelagem_evasao_municipio.ipynb
+│   └── analyse_missing_values.ipynb   # Qualidade de dados e relatório de ausentes
 ├── dashboard/
 │   └── app.py                   # Dashboard interativo (Streamlit + Plotly)
-├── analise_evasao_escolar.ipynb  # Análise exploratória completa
-├── iniciar_dashboard.bat        # Atalho para iniciar o dashboard (Windows)
+├── analise_evasao_escolar.ipynb
+├── iniciar_dashboard.bat
 ├── requirements.txt
 └── README.md
 ```
@@ -110,28 +119,42 @@ O pipeline em `etl/etl_pipeline.py` executa três etapas:
 **Extract** — Lê os CSVs brutos da pasta `data/raw/`
 
 **Transform**
-- Remove duplicatas (14 na base socio, 120 na base educacional)
+- Remove duplicatas (quantidades registradas nos logs na execução)
 - Corrige tipos de dados e faz clip de valores impossíveis (0–100%)
 - Cria classificação por período histórico
-- Classifica escolas por nível de risco de abandono
-- Agrega indicadores por ano (média entre escolas)
-- Integra as duas bases via JOIN pelo ano
-- Calcula o **Índice de Risco de Evasão** composto:
-  > Evasão EM (40%) + TDI EM (30%) + Repetência EM (30%)
+- Classifica linhas educacionais por nível de risco de abandono
+- **Agrega apenas a base socioeconômica por ano** (uma série municipal `taxa_*`)
+- **Agrega por ano uma cópia da educacional** para `dim_educ_anual` e para **`dim_integrado_anual`** (séries município–ano usadas em gráficos temporais)
+- **`fato_integrado`**: mantém **granularidade escola–ano** na base educacional e faz `merge` das taxas socioeconômicas municipais por **`ano`** (indicadores municipais **replicados** em cada escola)
+- Calcula o **Índice de Risco de Evasão** por linha (combinação de evasão municipal EM + TDI escola + repetência municipal EM)
+- Gera identificador **`id_linha_educacional`** (o extrato atual **não** contém código INEP/nome de escola)
 
-**Load** — Salva 7 tabelas em CSVs processados e no banco SQLite
+**Load** — Salva **8** tabelas em CSVs processados e no banco SQLite (`dim_integrado_anual` incluída)
+
+Ao final do **Load**, o ETL gera **`outputs/relatorio_missing_values.csv`** (e figuras em `outputs/figures/` quando possível), com contagens e percentuais de ausentes por coluna, ranking e **formas das tabelas** (bruto vs processado).
+
+---
+
+## Política de valores ausentes
+
+- **No ETL**, a maior parte dos `NaN` **permanece** nas tabelas exportadas — **sem imputação genérica** — para preservar rastreabilidade e evitar distorções antes da análise.
+- **Índice de risco de evasão** e **score do dashboard**: componentes ausentes **não** são tratados como zero; os **pesos são renormalizados** sobre os indicadores disponíveis em cada linha.
+- **Na modelagem (sklearn)**, `SimpleImputer` (**mediana** nas numéricas, **mais frequente** nas categóricas) fica **dentro do `Pipeline`** e é ajustado **apenas no treino**, evitando vazamento para o conjunto de teste.
+- Detalhamento metodológico: **`docs/politica_dados_ausentes.md`**. Notebook exploratório: **`notebooks/analyse_missing_values.ipynb`**.
 
 ---
 
 ## Integração das Bases de Dados
 
-As duas bases possuem granularidades diferentes: a base socioeconômica já vem com uma linha por ano, enquanto a base educacional tem uma linha por escola por ano — o que significa que um mesmo ano pode ter dezenas de registros, um para cada escola do município.
+A base socioeconômica agrega informações **municipais** por ano (várias linhas brutas por ano são consolidadas pela média no ETL). A base educacional mantém **uma linha por escola e ano** no arquivo original — sem código/nome de escola neste extrato; o ETL adiciona apenas **`id_linha_educacional`** como identificador estável da linha.
 
-Para que as duas possam ser analisadas juntas, o ETL executa dois passos. Primeiro, a base educacional é agregada por ano: todos os indicadores de cada escola (TDI, ATU, aprovação, reprovação, abandono) são calculados como a média entre todas as escolas do Recife naquele ano. Isso transforma os registros individuais por escola em um único valor representativo por ano. Segundo, as duas bases — agora ambas com uma linha por ano — são unidas por meio de um `INNER JOIN` usando o campo `ano` como chave. Isso significa que apenas os anos presentes nas duas fontes aparecem na tabela integrada final.
+**`fato_integrado` (fact table principal):** para cada registro educacional, executa-se um `merge` **interno** por **`ano`** com as taxas socioeconômicas municipais daquele ano. Assim, indicadores educacionais (TDI, abandono, reprovação por escola etc.) permanecem **específicos da escola**, enquanto promoção, repetência e evasão municipal são **o mesmo valor para todas as escolas do ano** — representando o **contexto municipal compartilhado**.
 
-O resultado é a tabela `fato_integrado`, que concentra em uma linha por ano todas as variáveis socioeconômicas (taxas de evasão, abandono, promoção, repetência) lado a lado com os indicadores educacionais agregados (TDI, ATU, HAD, aprovação, reprovação). A partir dessa tabela unificada, o ETL calcula também o **Índice de Risco de Evasão**: um score de 0 a 100 que combina evasão no Ensino Médio (peso 40%), distorção idade-série (peso 30%) e repetência no Ensino Médio (peso 30%).
+**`dim_integrado_anual`:** tabela auxiliar **município–ano** (socio anual × educ anual), usada no dashboard para séries temporais e KPIs que exigem **uma linha por ano** (evita duplicar o mesmo ano centenas de vezes quando se usa `fato_integrado`).
 
-Vale destacar uma limitação dessa abordagem: ao agregar por média, perde-se a variabilidade entre escolas. Uma escola com 0% de abandono e outra com 40% resultam na média de 20%, sem que a dispersão fique visível na tabela integrada. Por isso, o ETL também mantém a tabela `fato_educacional` com os dados brutos por escola, que é utilizada no dashboard para análises de distribuição individuais.
+**`fato_educacional`:** base educacional limpa, sem join com a socioeconômica.
+
+O **Índice de Risco de Evasão** na linha escola–ano é calculado com **evasão EM municipal** (mesmo valor para todas as escolas do ano), **TDI EM da escola** e **repetência EM municipal**.
 
 ---
 
@@ -145,13 +168,13 @@ O dashboard é organizado como uma **narrativa em 5 seções**, projetada para c
 | 2. Evolução ao Longo do Tempo | Como o problema mudou ano a ano? | Série temporal de evasão e abandono, variação anual, comparação EF × EM, boxplots por período histórico |
 | 3. Impacto da Pandemia | Por que 2020–2021 foram tão ruins? | Explicação dos 3 mecanismos (fechamento, ensino remoto, crise econômica), score antes/durante/após, comparação de indicadores por período |
 | 4. Por que os Alunos Evadem? | Quais são as causas? | Cadeia causal (reprovação → TDI → abandono → evasão), correlações com scatter e tendência, diagnóstico por indicador, mapa de correlação |
-| 5. Conclusões e Modelo Preditivo | O que fazer? Quais variáveis usar no modelo? | 5 insights consolidados, tabela de preditores para ML, plano de ação por urgência, projeção simplificada |
+| 5. Conclusões e Modelo Preditivo | O que fazer? Quais variáveis usar no modelo? | 5 insights consolidados, tabela de preditores para ML (com alvo formal: abandono EM em escola–ano), plano de ação por urgência, projeção simplificada |
 
 **Princípios do dashboard:**
 - **Texto antes de cada gráfico** — explica o que será analisado e qual é o insight principal
 - **Texto depois de cada gráfico** — interpreta os dados, explica as causas e destaca pontos críticos
 - **Insights automáticos** — pior ano, melhor ano, maior alta e maior queda calculados automaticamente dos dados
-- **Score de Risco 0–100** — Abandono EM (40%) + TDI (30%) + Reprovação EM (30%)
+- **Score de Risco 0–100** — Abandono EM (40%) + TDI (30%) + Reprovação EM (30%); pesos renormalizados se algum componente estiver ausente
 - **Período padrão de 4 anos** (últimos 4 disponíveis), ajustável pelo usuário
 - **Glossário na barra lateral** com definições de todos os termos técnicos
 - **Seção de Machine Learning** — tabela de variáveis preditoras e placeholder para modelo futuro
@@ -171,7 +194,7 @@ O dashboard é organizado como uma **narrativa em 5 seções**, projetada para c
 | ATU | Média de Alunos por Turma |
 | EF | Ensino Fundamental (1º ao 9º ano) |
 | EM | Ensino Médio (1º ao 3º ano) |
-| Score de Risco | Indicador 0–100: Abandono EM (40%) + TDI EM (30%) + Reprovação EM (30%) |
+| Score de Risco | Indicador 0–100: mesmos pesos do painel; ausentes não viram zero — pesos renormalizados |
 
 ---
 
@@ -180,7 +203,7 @@ O dashboard é organizado como uma **narrativa em 5 seções**, projetada para c
 1. **Ensino Médio é 2–3× mais crítico** que o EF — causas estruturais: pressão econômica, currículo percebido como distante e maior impacto de crises externas
 2. **Cadeia causal confirmada pelos dados:** Reprovação → TDI (defasagem escolar) → Abandono → Evasão definitiva. Qualquer intervenção que quebre essa cadeia reduz a evasão
 3. **Queda consistente de 2008 a 2019** — políticas educacionais e programas sociais produziram avanços reais; **pandemia de 2020–2021 reverteu parte desse progresso** em meses
-4. **TDI e taxa de abandono são os preditores mais fortes** da evasão — variáveis prioritárias para o modelo de Machine Learning
+4. **TDI e taxa de abandono são preditores centrais** na cadeia rumo à evasão — também alinhados ao modelo escola–ano (alvo: `taxa_abandono_em`).
 5. **Recuperação pós-pandemia é lenta:** em 2022, os indicadores melhoraram, mas não retornaram ao nível pré-pandemia; os efeitos educacionais de uma crise dessa magnitude são de longo prazo
 
 ### Variáveis prioritárias para modelagem preditiva
@@ -209,11 +232,43 @@ O notebook `analise_evasao_escolar.ipynb` contém 16 seções com visualizaçõe
 
 ---
 
+## Machine Learning (baseline)
+
+**Problema central do projeto:** evasão escolar e fatores de risco (análises descritivas e dashboard continuam ancorados na evasão municipal e na cadeia reprovação → TDI → abandono → evasão).
+
+**Modelagem preditiva (regressão supervisionada):** a taxa de abandono escolar do Ensino Médio (`taxa_abandono_em`) foi utilizada como **variável-alvo** devido à sua **disponibilidade em nível escola–ano**, à **variação entre escolas** e à **forte relação com o risco de evasão** na literatura educacional — como indicador operacional associado à evasão, não como substituto conceitual dela. **Não** se usa `taxa_evasao_em` como alvo em `fato_integrado`, porque no join municipal essa variável é **a mesma para todas as escolas do mesmo ano** e não discrimina observações escola–ano.
+
+O notebook e o módulo usam a tabela **`fato_integrado` em nível escola–ano**. **`taxa_evasao_em`** permanece como **covariável de contexto municipal**. Não se usa `indice_risco_evasao` como preditor (risco de vazamento conceitual).
+
+Definição formal: `docs/definicao_problema_e_escopo.md`.
+
+| Artefato | Descrição |
+|---|---|
+| `ml/baseline_municipio.py` | Carrega `fato_integrado`, `ColumnTransformer` + `Pipeline`, **Ridge** + **DummyRegressor** + comparação (**ElasticNet**, **HistGradientBoosting**), `plot_model_comparison_figures`, validação temporal por ano |
+| `notebooks/modelagem_evasao_municipio.ipynb` | EDA, baseline (§5), comparação multi-modelo e figuras (§7), gráfico observado × previsto |
+
+A função **`run_missing_impact_analysis`** (mesmo módulo) compara métricas do Ridge **com todas as features** versus **sem colunas muito incompletas** (taxa de ausência no treino acima de um limiar, por padrão 50%). Isso ajuda a avaliar sensibilidade do modelo à imputação e à presença de covariáveis esparsas — sem substituir o desenho principal baseado no Pipeline completo.
+
+**Validação:** treino nos anos `≤ 2017`, teste nos anos `≥ 2018` (split temporal; amostra pequena — métricas devem ser interpretadas com cautela). Regressão supervisionada: apenas linhas **com alvo observável** entram no fit; ausências nas covariáveis são imputadas dentro do Pipeline no treino.
+
+**Métricas reportadas:** MAE (principal), RMSE e R² no conjunto de teste.
+
+Execute o Jupyter a partir da **raiz do repositório**:
+
+```bash
+jupyter notebook notebooks/modelagem_evasao_municipio.ipynb
+```
+
+Ou use o VS Code / Cursor para abrir o `.ipynb` com o kernel Python onde `requirements.txt` foi instalado.
+
+---
+
 ## Tecnologias
 
 | Biblioteca | Uso |
 |---|---|
 | `pandas` / `numpy` | Manipulação e transformação de dados |
+| `scikit-learn` | Pipeline de pré-processamento e modelo baseline (regressão) |
 | `matplotlib` / `seaborn` | Visualizações estáticas (notebook) |
 | `plotly` | Gráficos interativos (dashboard) |
 | `streamlit` | Interface do dashboard web |

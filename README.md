@@ -27,7 +27,9 @@ projeto_evasao_escolar/
 ├── etl/
 │   └── etl_pipeline.py          # Pipeline ETL: Extract → Transform → Load
 ├── ml/
-│   └── baseline_municipio.py    # Pipeline sklearn + baseline Ridge + análise de impacto de ausentes
+│   ├── __init__.py
+│   ├── baseline_municipio.py    # Pré-processamento + regressores (HGB, árvore, KNN) + ausentes (Ridge)
+│   └── educational_ml.py        # Suite: comparação, KMeans, vizinhos, export para dashboard
 ├── notebooks/
 │   ├── modelagem_evasao_municipio.ipynb
 │   └── analyse_missing_values.ipynb   # Qualidade de dados e relatório de ausentes
@@ -244,12 +246,13 @@ Definição formal: `docs/definicao_problema_e_escopo.md`.
 
 | Artefato | Descrição |
 |---|---|
-| `ml/baseline_municipio.py` | Carrega `fato_integrado`, `ColumnTransformer` + `Pipeline`, **Ridge** + **DummyRegressor** + comparação (**ElasticNet**, **HistGradientBoosting**), `plot_model_comparison_figures`, validação temporal por ano |
-| `notebooks/modelagem_evasao_municipio.ipynb` | EDA, baseline (§5), comparação multi-modelo e figuras (§7), gráfico observado × previsto |
+| `ml/baseline_municipio.py` | `fato_integrado`, `ColumnTransformer` + `Pipeline`, **HistGradientBoosting**, **DecisionTree**, **KNN**, split temporal; análise de ausentes ainda com **Ridge** |
+| `ml/educational_ml.py` | Suite completa: comparação dos três regressores, **permutation importance**, **KMeans** (cotovelo/silhueta), regras da árvore, vizinhos KNN, CSV/JSON em `outputs/ml/`, figuras em `outputs/figures/` |
+| `notebooks/modelagem_evasao_municipio.ipynb` | EDA, baseline HGB (§5), suite educacional §7, integração com o dashboard |
 
 A função **`run_missing_impact_analysis`** (mesmo módulo) compara métricas do Ridge **com todas as features** versus **sem colunas muito incompletas** (taxa de ausência no treino acima de um limiar, por padrão 50%). Isso ajuda a avaliar sensibilidade do modelo à imputação e à presença de covariáveis esparsas — sem substituir o desenho principal baseado no Pipeline completo.
 
-**Validação:** treino nos anos `≤ 2017`, teste nos anos `≥ 2018` (split temporal; amostra pequena — métricas devem ser interpretadas com cautela). Regressão supervisionada: apenas linhas **com alvo observável** entram no fit; ausências nas covariáveis são imputadas dentro do Pipeline no treino.
+**Validação:** treino nos anos `≤ 2017`, teste nos anos `≥ 2018` (split temporal). Geração das saídas consumidas pelo dashboard: `python -c "from ml.educational_ml import run_educational_ml_suite; run_educational_ml_suite()"`.
 
 **Métricas reportadas:** MAE (principal), RMSE e R² no conjunto de teste.
 

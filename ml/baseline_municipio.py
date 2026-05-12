@@ -5,7 +5,8 @@ Enunciado metodológico: estimar **taxa_abandono_em** como indicador associado a
 evasão escolar; **`taxa_evasao_em`** permanece como **contexto municipal** (replicado por ano).
 
 Carrega `fato_integrado`, monta pré-processamento reprodutível e avalia
-modelos de regressão (Dummy, Ridge, ElasticNet, HistGradientBoosting) com split temporal.
+modelos de regressão (HistGradientBoosting, árvore, KNN) com split temporal;
+análise de ausentes ainda usa Ridge como referência linear.
 Linhas sem valor para o alvo (`taxa_abandono_em`) são excluídas do treino/teste
 (regressão supervisionada); covariáveis ausentes são tratadas pelo `SimpleImputer`
 no Pipeline (ajuste apenas no treino).
@@ -20,13 +21,14 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
-from sklearn.dummy import DummyRegressor
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import ElasticNet, Ridge
+from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.neighbors import KNeighborsRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.tree import DecisionTreeRegressor
 
 ROOT = Path(__file__).resolve().parent.parent
 PROC = ROOT / "data" / "processed"
@@ -124,33 +126,6 @@ def make_ridge_pipeline(
     )
 
 
-def make_elasticnet_pipeline(
-    numeric_features: list[str],
-    categorical_features: list[str],
-    *,
-    alpha: float = 0.05,
-    l1_ratio: float = 0.5,
-    max_iter: int = 5000,
-    random_state: int = 42,
-) -> Pipeline:
-    """Pré-processamento + ElasticNet (linear com regularização L1+L2; distinto do Ridge)."""
-    prep = build_preprocess_transformer(numeric_features, categorical_features)
-    return Pipeline(
-        steps=[
-            ("prep", prep),
-            (
-                "model",
-                ElasticNet(
-                    alpha=alpha,
-                    l1_ratio=l1_ratio,
-                    max_iter=max_iter,
-                    random_state=random_state,
-                ),
-            ),
-        ]
-    )
-
-
 def make_hist_gradient_boosting_pipeline(
     numeric_features: list[str],
     categorical_features: list[str],
@@ -175,6 +150,48 @@ def make_hist_gradient_boosting_pipeline(
                     early_stopping=False,
                 ),
             ),
+        ]
+    )
+
+
+def make_decision_tree_pipeline(
+    numeric_features: list[str],
+    categorical_features: list[str],
+    *,
+    max_depth: int = 4,
+    min_samples_leaf: int = 2,
+    random_state: int = 42,
+) -> Pipeline:
+    """Pré-processamento + árvore de decisão (interpretável; profundidade limitada)."""
+    prep = build_preprocess_transformer(numeric_features, categorical_features)
+    return Pipeline(
+        steps=[
+            ("prep", prep),
+            (
+                "model",
+                DecisionTreeRegressor(
+                    max_depth=max_depth,
+                    min_samples_leaf=min_samples_leaf,
+                    random_state=random_state,
+                ),
+            ),
+        ]
+    )
+
+
+def make_knn_pipeline(
+    numeric_features: list[str],
+    categorical_features: list[str],
+    *,
+    n_neighbors: int = 5,
+    weights: str = "distance",
+) -> Pipeline:
+    """Pré-processamento + KNN (escalas já normalizadas no bloco numérico)."""
+    prep = build_preprocess_transformer(numeric_features, categorical_features)
+    return Pipeline(
+        steps=[
+            ("prep", prep),
+            ("model", KNeighborsRegressor(n_neighbors=n_neighbors, weights=weights)),
         ]
     )
 
@@ -238,11 +255,14 @@ def evaluate_regression(
 def run_baseline_experiment(
     year_cutoff: int = DEFAULT_YEAR_CUTOFF,
     ridge_alpha: float = 1.0,
+    hgb_random_state: int = 42,
 ) -> dict[str, Any]:
     """
-    Executa baseline Dummy (média) e Ridge com validação temporal.
+    Baseline rápido: **HistGradientBoosting** como modelo principal preditivo
+    (mesmo split temporal). Mantém ``ridge_alpha`` apenas por compatibilidade de assinatura;
+    o Ridge não é mais o baseline principal.
 
-    Retorna dicionário com métricas, anos de treino/teste e pipelines ajustados.
+    Retorna métricas e previsões do HGB para notebooks que só precisam de um ajuste único.
     """
     S = prepare_temporal_supervised_split(year_cutoff=year_cutoff)
     X_train, y_train = S["X_train"], S["y_train"]
@@ -251,17 +271,12 @@ def run_baseline_experiment(
     categorical_features = S["categorical_features"]
     train_df, test_df = S["train_df"], S["test_df"]
 
-    dummy = DummyRegressor(strategy="mean")
-    dummy.fit(X_train, y_train)
-    y_pred_dummy = dummy.predict(X_test)
-    metrics_dummy = evaluate_regression(y_test, y_pred_dummy)
-
-    ridge_full = make_ridge_pipeline(
-        numeric_features, categorical_features, alpha=ridge_alpha
+    hgb = make_hist_gradient_boosting_pipeline(
+        numeric_features, categorical_features, random_state=hgb_random_state
     )
-    ridge_full.fit(X_train, y_train)
-    y_pred_ridge = ridge_full.predict(X_test)
-    metrics_ridge = evaluate_regression(y_test, y_pred_ridge)
+    hgb.fit(X_train, y_train)
+    y_pred_hgb = hgb.predict(X_test)
+    metrics_hgb = evaluate_regression(y_test, y_pred_hgb)
 
     return {
         "target": TARGET,
@@ -272,51 +287,46 @@ def run_baseline_experiment(
         "n_test": len(test_df),
         "numeric_features": numeric_features,
         "categorical_features": categorical_features,
-        "metrics_dummy_mean": metrics_dummy,
-        "metrics_ridge": metrics_ridge,
-        "pipeline_ridge": ridge_full,
-        "dummy_model": dummy,
+        "metrics_hgb": metrics_hgb,
+        "metrics_ridge": metrics_hgb,
+        "pipeline_hgb": hgb,
+        "pipeline_ridge": hgb,
         "y_test": y_test,
-        "y_pred_ridge": y_pred_ridge,
-        "y_pred_dummy": y_pred_dummy,
+        "y_pred_hgb": y_pred_hgb,
+        "y_pred_ridge": y_pred_hgb,
     }
 
 
 def run_model_comparison_experiment(
     year_cutoff: int = DEFAULT_YEAR_CUTOFF,
     ridge_alpha: float = 1.0,
-    elasticnet_alpha: float = 0.05,
-    elasticnet_l1_ratio: float = 0.5,
+    tree_max_depth: int = 4,
+    knn_neighbors: int = 5,
     hgb_max_depth: int | None = 5,
     hgb_max_iter: int = 200,
     hgb_learning_rate: float = 0.08,
     random_state: int = 42,
 ) -> dict[str, Any]:
     """
-    Compara **quatro** regressores no mesmo conjunto de teste temporal:
+    Compara **três** regressores no mesmo conjunto de teste temporal:
 
-    - ``DummyRegressor`` (média do treino) — referência trivial
-    - ``Ridge`` — já usado no baseline
-    - ``ElasticNet`` — linear com L1+L2 (distinto do Ridge)
-    - ``HistGradientBoostingRegressor`` — boosting sobre árvores
+    - ``HistGradientBoostingRegressor`` — modelo principal preditivo
+    - ``DecisionTreeRegressor`` — interpretabilidade / regras
+    - ``KNeighborsRegressor`` — vizinhança / escolas semelhantes
 
     Todas as métricas são MAE, RMSE e R² em ``y_test``.
+    O parâmetro ``ridge_alpha`` é ignorado (mantido só por compatibilidade com chamadas antigas).
+    Para KMeans e artefatos completos use ``ml.educational_ml.run_educational_ml_suite``.
     """
     S = prepare_temporal_supervised_split(year_cutoff=year_cutoff)
     X_train, y_train = S["X_train"], S["y_train"]
     X_test, y_test = S["X_test"], S["y_test"]
     num_f, cat_f = S["numeric_features"], S["categorical_features"]
 
-    pipelines: dict[str, Pipeline | DummyRegressor] = {
-        "Dummy (média)": DummyRegressor(strategy="mean"),
-        "Ridge": make_ridge_pipeline(num_f, cat_f, alpha=ridge_alpha),
-        "ElasticNet": make_elasticnet_pipeline(
-            num_f,
-            cat_f,
-            alpha=elasticnet_alpha,
-            l1_ratio=elasticnet_l1_ratio,
-            random_state=random_state,
-        ),
+    n_tr = len(X_train)
+    k_nn = min(max(2, knn_neighbors), max(2, n_tr - 1))
+
+    pipelines: dict[str, Pipeline] = {
         "HistGradientBoosting": make_hist_gradient_boosting_pipeline(
             num_f,
             cat_f,
@@ -325,11 +335,15 @@ def run_model_comparison_experiment(
             learning_rate=hgb_learning_rate,
             random_state=random_state,
         ),
+        "DecisionTreeRegressor": make_decision_tree_pipeline(
+            num_f, cat_f, max_depth=tree_max_depth, random_state=random_state
+        ),
+        "KNeighborsRegressor": make_knn_pipeline(num_f, cat_f, n_neighbors=k_nn),
     }
 
     metrics_by_model: dict[str, dict[str, float]] = {}
     predictions_by_model: dict[str, np.ndarray] = {}
-    fitted: dict[str, Pipeline | DummyRegressor] = {}
+    fitted: dict[str, Pipeline] = {}
 
     for name, est in pipelines.items():
         est.fit(X_train, y_train)
@@ -413,7 +427,7 @@ def plot_model_comparison_figures(
 
     # --- Figura 2: R² ---
     fig2, ax2 = plt.subplots(figsize=(8, 4))
-    colors = ["#64748B" if k.startswith("Dummy") else "#1E3A5F" for k in order]
+    colors = ["#1E3A5F" for _ in order]
     ax2.barh(order[::-1], r2_v[::-1], color=colors[::-1])
     ax2.set_xlabel("R²")
     ax2.set_title("R² no conjunto de teste (maior é melhor)")

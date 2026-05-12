@@ -3,6 +3,7 @@ Dashboard — Evasão Escolar em Recife
 Execute com:  python -m streamlit run dashboard/app.py
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -40,6 +41,7 @@ st.markdown("""
 # ---------------------------------------------------------------------------
 ROOT = Path(__file__).resolve().parent.parent
 PROC = ROOT / "data" / "processed"
+ML_OUT = ROOT / "outputs" / "ml"
 
 COR_PRIMARIA = "#1E3A5F"
 COR_EF       = "#2563EB"
@@ -79,7 +81,7 @@ GLOSSARIO = {
     "ATU":                   "Média de Alunos por Turma.",
     "Score de Risco":        "Indicador de 0 a 100: pesos 40% abandono EM, 30% TDI EM, 30% reprovação EM. Se algum componente estiver ausente, os pesos são renormalizados sobre os disponíveis (não se assume zero). Quanto maior o score, maior o risco.",
     "Sem dado":               "Indicador ou taxa não disponível na base para aquele registro — não equivale a valor zero nas classificações de risco.",
-    "Modelo baseline (ML)":   "Regressão supervisionada em `fato_integrado`: alvo `taxa_abandono_em` (escola–ano); evasão municipal entra como contexto. Ver `docs/definicao_problema_e_escopo.md`.",
+    "Modelo principal (ML)":  "HistGradientBoosting estima o abandono no EM por escola–ano; árvore e KNN complementam (regras e escolas semelhantes); KMeans agrupa perfis. Ver `ml/educational_ml.py` e `docs/definicao_problema_e_escopo.md`.",
     "EJA":                   "Educação de Jovens e Adultos — modalidade para quem não concluiu o ensino regular na idade prevista.",
 }
 
@@ -116,6 +118,26 @@ def tabela_municipio_ano(dados: dict) -> pd.DataFrame:
     if not chaves:
         return pd.DataFrame()
     return s.merge(e, on=chaves, how="inner", suffixes=("_socio", "_educ")).sort_values("ano").reset_index(drop=True)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def carregar_artefatos_ml() -> dict | None:
+    """
+    Lê saídas geradas por ``ml.educational_ml.run_educational_ml_suite`` (CSV + JSON).
+    Se os ficheiros não existirem, devolve None (o painel indica como gerar).
+    """
+    csv_p = ML_OUT / "escola_ano_ml_enriquecido.csv"
+    js_p = ML_OUT / "ml_storytelling.json"
+    if not (csv_p.exists() and js_p.exists()):
+        return None
+    try:
+        return {
+            "df": pd.read_csv(csv_p),
+            "meta": json.loads(js_p.read_text(encoding="utf-8")),
+        }
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError, pd.errors.ParserError):
+        return None
+
 
 # ---------------------------------------------------------------------------
 # Score de risco
@@ -1299,17 +1321,110 @@ ainda mais dificuldade no ensino remoto e muitos optaram por trabalhar.
     )
 
 
+def render_ml_inteligencia_section() -> None:
+    """Resultados exportados por ``ml.educational_ml.run_educational_ml_suite`` (linguagem acessivel)."""
+    st.markdown("### Apoio inteligente — abandono no EM e risco escolar")
+    st.caption(
+        "Tres regressores estimam a taxa de abandono no Ensino Medio por escola e ano; "
+        "o KMeans agrupa perfis sem usar o abandono para formar os grupos (analise complementar)."
+    )
+    pack = carregar_artefatos_ml()
+    if pack is None:
+        st.info(
+            "**Ainda nao ha ficheiros exportados.** Na raiz do projeto execute:\n\n"
+            "`python -c \"from ml.educational_ml import run_educational_ml_suite; run_educational_ml_suite()\"`\n\n"
+            "ou o notebook `notebooks/modelagem_evasao_municipio.ipynb` (secao 7). "
+            "Sao criados `outputs/ml/` e figuras em `outputs/figures/`."
+        )
+        return
+
+    meta = pack["meta"]
+    dfm = pack["df"]
+    if meta.get("narrativa_comparacao_regressao"):
+        st.markdown("#### O que os modelos mostram (em linguagem simples)")
+        st.markdown(meta["narrativa_comparacao_regressao"])
+
+    st.markdown("#### Comparacao dos tres regressores no teste temporal")
+    met = meta.get("metrics") or {}
+    if met:
+        tab = pd.DataFrame(
+            [
+                {"Modelo": nome, "MAE (p.p.)": round(v["mae"], 3), "RMSE": round(v["rmse"], 3), "R²": round(v["r2"], 3)}
+                for nome, v in met.items()
+            ]
+        )
+        st.dataframe(tab, use_container_width=True, hide_index=True)
+    st.caption(
+        "**MAE** — erro medio em pontos percentuais (menor e melhor). "
+        "**R²** — quanto da variacao no teste o modelo explica (com poucas linhas de teste, pode oscilar)."
+    )
+
+    st.markdown("##### Papel de cada algoritmo")
+    st.markdown(
+        "- **HistGradientBoosting** — melhor desempenho preditivo na maioria dos casos; ranking de risco no teste.\n"
+        "- **Arvore de decisao** — regras faceis de explicar em reuniao pedagogica.\n"
+        "- **KNN** — encontra escolas **parecidas** para benchmarking.\n"
+        "- **KMeans** — segmenta perfis de indicadores para localizar grupos mais vulneraveis."
+    )
+
+    col_a, col_b = st.columns(2)
+    fig_dir = ROOT / "outputs" / "figures"
+    with col_a:
+        st.markdown("**Modelo principal — observado x previsto**")
+        p1 = fig_dir / "ml_hgb_obs_vs_pred.png"
+        if p1.exists():
+            st.image(str(p1), use_container_width=True)
+    with col_b:
+        st.markdown("**Arvore (visao simplificada)**")
+        p2 = fig_dir / "ml_decision_tree.png"
+        if p2.exists():
+            st.image(str(p2), use_container_width=True)
+
+    p_imp = fig_dir / "ml_hgb_permutation_importance.png"
+    if p_imp.exists():
+        st.markdown("**Indicadores que mais influenciam o modelo principal** (permutacao no teste)")
+        st.image(str(p_imp), use_container_width=True)
+
+    st.markdown("##### KNN — exemplo de escolas vizinhas (primeira linha do teste)")
+    vk = ML_OUT / "knn_vizinhos_exemplo_primeira_linha_teste.csv"
+    if vk.exists():
+        st.dataframe(pd.read_csv(vk), use_container_width=True, hide_index=True)
+    pr = fig_dir / "ml_knn_radar_exemplo.png"
+    if pr.exists():
+        st.caption("Radar ilustrativo: escola de referencia no treino vs media dos vizinhos mais proximos.")
+        st.image(str(pr), use_container_width=True)
+
+    st.markdown("##### KMeans — grupos e interpretacao")
+    if meta.get("kmeans_interpretacao"):
+        st.markdown(meta["kmeans_interpretacao"])
+    prof = ML_OUT / "kmeans_perfil_medio_por_cluster.csv"
+    if prof.exists():
+        st.dataframe(pd.read_csv(prof), use_container_width=True, hide_index=True)
+    for fn in ("ml_kmeans_elbow.png", "ml_kmeans_scatter_pca.png"):
+        fp = fig_dir / fn
+        if fp.exists():
+            st.image(str(fp), use_container_width=True)
+
+    with st.expander("Regras em texto (arvore de decisao)"):
+        st.markdown(meta.get("arvore_regras_resumo", "_Sem resumo._"))
+
+    if "pred_hgb" in dfm.columns and "split" in dfm.columns:
+        tt = dfm[dfm["split"] == "teste"].dropna(subset=["pred_hgb"])
+        if not tt.empty:
+            cols = [c for c in ("ano", "id_linha_educacional", "taxa_abandono_em", "pred_hgb", "rank_risco_abandono_previsto") if c in tt.columns]
+            st.markdown("##### Maior abandono previsto no teste (priorizacao)")
+            st.dataframe(tt.sort_values("pred_hgb", ascending=False).head(15)[cols], use_container_width=True, hide_index=True)
+
+
 # ===========================================================================
 # PAGINA 5 — CONCLUSÕES E MODELO PREDITIVO
 # ===========================================================================
 def pagina_conclusoes(dados: dict, filtros: dict, ins: dict):
     st.markdown("# Conclusoes, Insights e Base para Machine Learning")
     st.write(
-        "Esta secao consolida os principais aprendizados do dashboard e prepara o terreno "
-        "para a etapa de modelagem supervisionada. "
-        "No baseline implementado, estima-se a **taxa de abandono no Ensino Medio** por escola–ano "
-        "como indicador associado ao risco de evasao; as series municipais de evasao "
-        "continuam a contextualizar o cenario da cidade."
+        "Esta secao consolida os principais aprendizados do dashboard e integra a etapa de **machine learning** "
+        "orientada a decisao (previsao de abandono no EM, regras, vizinhos e segmentos). "
+        "Os modelos usam `fato_integrado` em nivel escola–ano; a evasao municipal continua descrita nas series do painel."
     )
 
     a1, a2 = filtros["ano_range"]
@@ -1488,14 +1603,13 @@ def pagina_conclusoes(dados: dict, filtros: dict, ins: dict):
              ),
              indicador="Evasao acumulada cria uma populacao fora do sistema"),
         dict(urgencia="LONGO PRAZO",
-             titulo="Implantar modelo preditivo de risco de evasao por aluno",
+             titulo="Implantar apoio inteligente ao monitoramento por escola",
              descricao=(
-                 "As analises deste dashboard mostram padroes estaveis na cadeia reprovacao–TDI–abandono–evasao. "
-                 "Um modelo de regressao (alvo: abandono EM por escola–ano, como no notebook de modelagem) "
-                 "poderia priorizar escolas com maior erro de predicao nas covariaveis disponiveis "
-                 "e apoiar monitoramento preventivo."
+                 "Os modelos em `ml/educational_ml.py` combinam previsao de abandono (HistGradientBoosting), "
+                 "regras claras (arvore), comparacao entre escolas parecidas (KNN) e segmentacao de perfis (KMeans). "
+                 "Priorize escolas com maior abandono previsto no teste e use os grupos KMeans para politicas por perfil."
              ),
-             indicador="A cadeia causal identificada nos dados viabiliza a modelagem preditiva"),
+             indicador="Exporte os resultados com run_educational_ml_suite() e consulte-os nesta pagina do painel"),
     ]
 
     for ac in acoes:
@@ -1514,21 +1628,7 @@ def pagina_conclusoes(dados: dict, filtros: dict, ins: dict):
 
     st.divider()
 
-    # ── Placeholder para modelo preditivo ─────────────────────────────────────
-    st.markdown("### [Em desenvolvimento] — Modelo regressao abandono EM (indicador de risco de evasao)")
-    st.info(
-        "**O que sera adicionado aqui:**\n\n"
-        "Um modelo de regressao supervisionada treinado com os dados historicos de Recife para:\n\n"
-        "- Estimar a **taxa de abandono no EM** em nivel escola–ano (alinhado ao notebook `modelagem_evasao_municipio`) "
-        "como indicador associado ao risco de evasao\n"
-        "- Identificar escolas / anos com maior erro de predicao nas covariaveis disponiveis\n"
-        "- Simular cenarios de politica (ex.: se a reprovacao cair X p.p., como reage o abandono previsto)\n\n"
-        "**As variaveis prioritarias para o modelo**, com base neste dashboard:\n"
-        "TDI, taxa de abandono, taxa de reprovacao, taxa de aprovacao e periodo historico "
-        "(evasao municipal pode entrar como contexto no `fato_integrado`).\n\n"
-        "**Por enquanto**, o Score de Risco calculado manualmente (disponivel na barra lateral) "
-        "serve como aproximacao do que o modelo fara de forma mais precisa e automatizada."
-    )
+    render_ml_inteligencia_section()
 
     # Simulacao simples como prévia
     with st.expander("Ver projecao simplificada (tendencia linear — apenas indicativa)"):

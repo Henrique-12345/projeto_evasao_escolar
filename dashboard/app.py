@@ -1344,6 +1344,40 @@ def render_ml_inteligencia_section() -> None:
         st.markdown("#### O que os modelos mostram (em linguagem simples)")
         st.markdown(meta["narrativa_comparacao_regressao"])
 
+    if meta.get("final_model_name"):
+        st.markdown("#### Modelo final escolhido")
+        st.success(
+            f"**{meta['final_model_name']}** foi mantido como modelo principal do produto. "
+            "Ele gera o ranking de risco, sustenta as previsoes exportadas e possui tuning temporal."
+        )
+        mfin = meta.get("final_model_test_metrics") or {}
+        if mfin:
+            c1, c2, c3 = st.columns(3)
+            c1.metric("MAE final (teste)", f"{mfin.get('mae', float('nan')):.3f}")
+            c2.metric("RMSE final (teste)", f"{mfin.get('rmse', float('nan')):.3f}")
+            c3.metric("R² final (teste)", f"{mfin.get('r2', float('nan')):.3f}")
+        if meta.get("final_model_best_params"):
+            st.caption("Hiperparametros selecionados por busca aleatoria temporal:")
+            st.json(meta["final_model_best_params"], expanded=False)
+
+    cv_summary = meta.get("final_model_cv_summary") or {}
+    if cv_summary:
+        st.markdown("#### Validacao cruzada temporal (estabilidade)")
+        cv_tab = pd.DataFrame(
+            [
+                {
+                    "MAE validacao (media)": round(cv_summary.get("mae_validacao_media", float("nan")), 3),
+                    "MAE validacao (dp)": round(cv_summary.get("mae_validacao_dp", float("nan")), 3),
+                    "RMSE validacao (media)": round(cv_summary.get("rmse_validacao_media", float("nan")), 3),
+                    "R² validacao (media)": round(cv_summary.get("r2_validacao_media", float("nan")), 3),
+                    "Folds": int(cv_summary.get("n_folds", 0)),
+                }
+            ]
+        )
+        st.dataframe(cv_tab, use_container_width=True, hide_index=True)
+        if meta.get("final_model_cv_diagnosis"):
+            st.info(meta["final_model_cv_diagnosis"])
+
     st.markdown("#### Comparacao dos tres regressores no teste temporal")
     met = meta.get("metrics") or {}
     if met:
@@ -1385,6 +1419,16 @@ def render_ml_inteligencia_section() -> None:
         st.markdown("**Indicadores que mais influenciam o modelo principal** (permutacao no teste)")
         st.image(str(p_imp), use_container_width=True)
 
+    for fn, titulo in (
+        ("ml_final_tuning_top10.png", "**Busca de hiperparametros — melhores candidatos**"),
+        ("ml_final_cv_mae_by_fold.png", "**CV temporal — erro por fold**"),
+        ("ml_final_learning_curve_mae.png", "**Curva de aprendizado do modelo final**"),
+    ):
+        fp = fig_dir / fn
+        if fp.exists():
+            st.markdown(titulo)
+            st.image(str(fp), use_container_width=True)
+
     st.markdown("##### KNN — exemplo de escolas vizinhas (primeira linha do teste)")
     vk = ML_OUT / "knn_vizinhos_exemplo_primeira_linha_teste.csv"
     if vk.exists():
@@ -1414,6 +1458,13 @@ def render_ml_inteligencia_section() -> None:
             cols = [c for c in ("ano", "id_linha_educacional", "taxa_abandono_em", "pred_hgb", "rank_risco_abandono_previsto") if c in tt.columns]
             st.markdown("##### Maior abandono previsto no teste (priorizacao)")
             st.dataframe(tt.sort_values("pred_hgb", ascending=False).head(15)[cols], use_container_width=True, hide_index=True)
+
+    if meta.get("final_model_inference_function"):
+        st.caption(
+            "Inferencia disponivel em "
+            f"`{meta['final_model_inference_function']}` "
+            f"e bundle salvo em `{meta.get('final_model_bundle_path', 'outputs/ml/final_model_bundle.pkl')}`."
+        )
 
 
 # ===========================================================================

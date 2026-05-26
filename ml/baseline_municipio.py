@@ -76,9 +76,13 @@ def build_preprocess_transformer(
     numeric_features: list[str],
     categorical_features: list[str],
 ) -> ColumnTransformer:
+    try:
+        _num_imputer = SimpleImputer(strategy="median", keep_empty_features=True)
+    except TypeError:
+        _num_imputer = SimpleImputer(strategy="median")
     numeric_pipeline = Pipeline(
         steps=[
-            ("imputer", SimpleImputer(strategy="median")),
+            ("imputer", _num_imputer),
             ("scaler", StandardScaler()),
         ]
     )
@@ -87,9 +91,13 @@ def build_preprocess_transformer(
         _ohe = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
     except TypeError:
         _ohe = OneHotEncoder(handle_unknown="ignore", sparse=False)
+    try:
+        _cat_imputer = SimpleImputer(strategy="most_frequent", keep_empty_features=True)
+    except TypeError:
+        _cat_imputer = SimpleImputer(strategy="most_frequent")
     categorical_pipeline = Pipeline(
         steps=[
-            ("imputer", SimpleImputer(strategy="most_frequent")),
+            ("imputer", _cat_imputer),
             ("onehot", _ohe),
         ]
     )
@@ -133,6 +141,9 @@ def make_hist_gradient_boosting_pipeline(
     max_depth: int | None = 5,
     max_iter: int = 200,
     learning_rate: float = 0.08,
+    min_samples_leaf: int = 20,
+    l2_regularization: float = 0.0,
+    max_leaf_nodes: int = 31,
     random_state: int = 42,
 ) -> Pipeline:
     """Pré-processamento + HistGradientBoosting (ensemble baseado em árvores)."""
@@ -146,6 +157,9 @@ def make_hist_gradient_boosting_pipeline(
                     max_depth=max_depth,
                     max_iter=max_iter,
                     learning_rate=learning_rate,
+                    min_samples_leaf=min_samples_leaf,
+                    l2_regularization=l2_regularization,
+                    max_leaf_nodes=max_leaf_nodes,
                     random_state=random_state,
                     early_stopping=False,
                 ),
@@ -221,6 +235,11 @@ def prepare_temporal_supervised_split(
         raise ValueError(
             "Após remover linhas sem alvo (%s), treino ou teste ficou vazio." % TARGET
         )
+
+    sort_cols = [c for c in ["ano", "id_linha_educacional"] if c in train_df.columns]
+    if sort_cols:
+        train_df = train_df.sort_values(sort_cols, kind="mergesort").reset_index(drop=True)
+        test_df = test_df.sort_values(sort_cols, kind="mergesort").reset_index(drop=True)
 
     feat_cols = numeric_features + categorical_features
     X_train = train_df[feat_cols]

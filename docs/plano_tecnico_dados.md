@@ -118,7 +118,7 @@ Qualquer evolução para **microdados individuais** ou **outras regiões** exigi
 
 ## 8. Dependências de software (extração e pipeline)
 
-Conforme `requirements.txt`: **pandas**, **numpy**, **SQLAlchemy** (uso no ecossistema), **streamlit** / **plotly** (produto de visualização). Para a etapa de ML (fora do escopo deste arquivo, mas prevista): inclusão futura de **scikit-learn** (e opcionalmente **optuna**) no mesmo arquivo de dependências.
+Conforme `requirements.txt`: **pandas**, **numpy**, **SQLAlchemy** (uso no ecossistema), **streamlit** / **plotly** (produto de visualização) e **scikit-learn** para a etapa de ML já implementada no repositório (pipelines, regressão, KMeans, `RandomizedSearchCV`, `TimeSeriesSplit`). **Optuna** permanece opcional para evolução futura.
 
 ---
 

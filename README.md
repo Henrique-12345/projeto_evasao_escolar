@@ -234,7 +234,7 @@ O notebook `analise_evasao_escolar.ipynb` contém 16 seções com visualizaçõe
 
 ---
 
-## Machine Learning (baseline)
+## Machine Learning
 
 **Problema central do projeto:** evasão escolar e fatores de risco (análises descritivas e dashboard continuam ancorados na evasão municipal e na cadeia reprovação → TDI → abandono → evasão).
 
@@ -247,14 +247,16 @@ Definição formal: `docs/definicao_problema_e_escopo.md`.
 | Artefato | Descrição |
 |---|---|
 | `ml/baseline_municipio.py` | `fato_integrado`, `ColumnTransformer` + `Pipeline`, **HistGradientBoosting**, **DecisionTree**, **KNN**, split temporal; análise de ausentes ainda com **Ridge** |
-| `ml/educational_ml.py` | Suite completa: comparação dos três regressores, **permutation importance**, **KMeans** (cotovelo/silhueta), regras da árvore, vizinhos KNN, CSV/JSON em `outputs/ml/`, figuras em `outputs/figures/` |
-| `notebooks/modelagem_evasao_municipio.ipynb` | EDA, baseline HGB (§5), suite educacional §7, integração com o dashboard |
+| `ml/educational_ml.py` | Suite completa: comparação dos três regressores, **RandomizedSearchCV** do HGB, **TimeSeriesSplit** por ano, **permutation importance**, **KMeans**, função de inferência (`predict_taxa_abandono_em`), bundle final `.pkl`, CSV/JSON em `outputs/ml/`, figuras em `outputs/figures/` |
+| `notebooks/modelagem_evasao_municipio.ipynb` | EDA, baseline HGB (§5), comparação (§7), tuning + validação cruzada temporal + inferência do modelo final |
 
 A função **`run_missing_impact_analysis`** (mesmo módulo) compara métricas do Ridge **com todas as features** versus **sem colunas muito incompletas** (taxa de ausência no treino acima de um limiar, por padrão 50%). Isso ajuda a avaliar sensibilidade do modelo à imputação e à presença de covariáveis esparsas — sem substituir o desenho principal baseado no Pipeline completo.
 
-**Validação:** treino nos anos `≤ 2017`, teste nos anos `≥ 2018` (split temporal). Geração das saídas consumidas pelo dashboard: `python -c "from ml.educational_ml import run_educational_ml_suite; run_educational_ml_suite()"`.
+**Validação:** treino nos anos `≤ 2017`, teste nos anos `≥ 2018` (split temporal). O modelo final usa **RandomizedSearchCV** no treino com **TimeSeriesSplit por ano**, seguido de avaliação no teste holdout e exportação para o dashboard via `python -c "from ml.educational_ml import run_educational_ml_suite; run_educational_ml_suite()"`.
 
-**Métricas reportadas:** MAE (principal), RMSE e R² no conjunto de teste.
+**Métricas reportadas:** MAE (principal), RMSE e R² no conjunto de teste, além de média / desvio por fold na validação cruzada temporal.
+
+**Inferência mínima:** `ml.educational_ml.predict_taxa_abandono_em(...)` carrega o bundle salvo em `outputs/ml/final_model_bundle.pkl` e prevê `taxa_abandono_em` para novos dados com as mesmas features do pipeline.
 
 Execute o Jupyter a partir da **raiz do repositório**:
 
@@ -271,7 +273,7 @@ Ou use o VS Code / Cursor para abrir o `.ipynb` com o kernel Python onde `requir
 | Biblioteca | Uso |
 |---|---|
 | `pandas` / `numpy` | Manipulação e transformação de dados |
-| `scikit-learn` | Pipeline de pré-processamento e modelo baseline (regressão) |
+| `scikit-learn` | Pipeline de pré-processamento, tuning (`RandomizedSearchCV`), validação temporal e modelos de regressão / clusterização |
 | `matplotlib` / `seaborn` | Visualizações estáticas (notebook) |
 | `plotly` | Gráficos interativos (dashboard) |
 | `streamlit` | Interface do dashboard web |

@@ -78,6 +78,27 @@ Sem esse diagnóstico, o gestor teria apenas números isolados ou um modelo “c
 
 **Limitação honesta:** parte do diagnóstico usa **evasão municipal** (uma linha por ano na série municipal), enquanto a modelagem preditiva usa **abandono por escola–ano**. O dashboard deixa isso explícito nas narrativas.
 
+### Como visualizar no dashboard
+
+1. Na **raiz do repositório**, inicie o painel:
+   ```bash
+   streamlit run dashboard/app.py
+   ```
+2. O navegador abre o dashboard. Na **barra lateral esquerda**, use o seletor **“Secoes do painel”** (botões de rádio).
+3. Ajuste os **filtros** na barra lateral antes de explorar:
+   - **Intervalo de anos** (slider);
+   - **Nível de ensino** (Ensino Fundamental e/ou Ensino Médio).
+4. Percorra as **páginas 1 a 4** — todas compõem o diagnóstico:
+
+| Página no painel | O que o gestor vê |
+|------------------|-------------------|
+| **1. Contexto Geral** | Visão do ano mais recente: evasão EF/EM, abandono EM, TDI, **Score de Risco (0–100)** e classificação (Baixo / Moderado / Alto / Crítico); gráficos de gauge; variação dos indicadores no período; textos de insight no topo de cada bloco. |
+| **2. Evolucao ao Longo do Tempo** | Séries anuais de evasão e abandono (linhas sólidas e pontilhadas); destaque visual do período da pandemia (2020–2022). |
+| **3. Impacto da Pandemia** | Explicação dos mecanismos do choque COVID-19 e gráficos comparando antes, durante e depois da pandemia. |
+| **4. Por que os Alunos Evadem?** | Cadeia reprovação → TDI → abandono → evasão; dispersões (ex.: TDI × abandono); **mapa de correlação** entre indicadores no nível escola–ano. |
+
+**Dica:** se os dados não carregarem, use o botão **“Reprocessar dados (ETL)”** na barra lateral (o ETL também roda automaticamente na primeira abertura).
+
 ---
 
 ## Funcionalidade 2 — Priorização de risco com machine learning
@@ -160,6 +181,31 @@ python3 -c "from ml.educational_ml import run_educational_ml_suite; run_educatio
 
 **Limitação honesta:** a base tem poucas linhas no teste temporal; métricas no holdout podem ser boas, mas a **validação cruzada** mostra variabilidade entre folds — o sistema documenta isso em `final_model_cv_diagnosis` no JSON e no dashboard.
 
+### Como visualizar no dashboard
+
+**Pré-requisito:** gere os artefatos de ML uma vez (na raiz do projeto):
+
+```bash
+python3 -c "from ml.educational_ml import run_educational_ml_suite; run_educational_ml_suite()"
+```
+
+1. Abra o dashboard: `streamlit run dashboard/app.py`.
+2. Na barra lateral, selecione **“5. Conclusoes e Modelo Preditivo”**.
+3. Role até o bloco **“Apoio inteligente — abandono no EM e risco escolar”** (função `render_ml_inteligencia_section()`).
+4. Nesse bloco, a priorização aparece em:
+
+| Elemento na tela | Conteúdo |
+|------------------|----------|
+| **Modelo final escolhido** | Nome do HGB ajustado e métricas **MAE**, **RMSE**, **R²** no teste temporal. |
+| **Validacao cruzada temporal** | Tabela de estabilidade e texto de diagnóstico (overfitting / variância entre folds). |
+| **Comparacao dos tres regressores** | Tabela MAE/RMSE/R² de HGB, árvore e KNN no mesmo teste. |
+| **Figuras** | Observado × previsto, importância de variáveis, tuning, CV por fold, curva de aprendizado. |
+| **Maior abandono previsto no teste (priorizacao)** | Tabela com as 15 linhas de maior `pred_hgb` / `pred_modelo_final`, com **rank_risco_abandono_previsto**, `ano` e `id_linha_educacional`. |
+
+Se o bloco mostrar *“Ainda nao ha ficheiros exportados”*, execute o comando acima ou o notebook `notebooks/modelagem_evasao_municipio.ipynb` (seção 7) e recarregue a página.
+
+**Alternativa fora do dashboard:** abra `outputs/ml/escola_ano_ml_enriquecido.csv` e ordene por `rank_risco_abandono_previsto` ou `pred_modelo_final`.
+
 ---
 
 ## Funcionalidade 3 — Explicação e comparação de perfis
@@ -228,6 +274,19 @@ O gestor ganha **narrativa e segmentação**, não apenas um número de risco.
 
 **Notebook:** `notebooks/modelagem_evasao_municipio.ipynb` (§7 e seguintes).
 
+### Como visualizar no dashboard
+
+Usa a **mesma página** da Funcionalidade 2: **“5. Conclusoes e Modelo Preditivo”** → bloco **“Apoio inteligente”**. O pré-requisito é o mesmo (`run_educational_ml_suite()`).
+
+| Ferramenta | Onde clicar / rolar no painel |
+|------------|-------------------------------|
+| **Árvore de decisão** | Imagem **“Arvore (visao simplificada)”**; expanda **“Regras em texto (arvore de decisao)”** para ler os limiares em português. |
+| **KNN (escolas parecidas)** | Seção **“KNN — exemplo de escolas vizinhas”** — tabela com vizinhos da primeira linha do teste; gráfico radar abaixo (se `ml_knn_radar_exemplo.png` existir). |
+| **KMeans (perfis)** | Seção **“KMeans — grupos e interpretacao”** — texto automático dos grupos, tabela de médias por cluster e figuras de cotovelo / PCA. |
+| **Comparação entre regressores** | Tabela e narrativa em **“O que os modelos mostram”** e **“Papel de cada algoritmo”** — contextualiza árvore e KNN frente ao HGB. |
+
+**Alternativa fora do dashboard:** figuras em `outputs/figures/ml_*.png` e tabelas em `outputs/ml/knn_vizinhos_exemplo_primeira_linha_teste.csv` e `kmeans_perfil_medio_por_cluster.csv`.
+
 ---
 
 ## Como as três funcionalidades se conectam
@@ -267,13 +326,32 @@ Fluxo típico de uso pelo gestor:
 
 ---
 
-## Onde visualizar cada funcionalidade
+## Guia rápido — como o usuário visualiza tudo no dashboard
 
-| Funcionalidade | Onde ver |
-|----------------|----------|
-| 1. Diagnóstico | `streamlit run dashboard/app.py` → páginas 1–4 |
-| 2. Priorização | Página 5 → “Apoio inteligente”; `outputs/ml/escola_ano_ml_enriquecido.csv` |
-| 3. Explicação e perfis | Página 5 (árvore, KNN, KMeans); `outputs/figures/ml_*.png`; `outputs/ml/` |
+### Passo a passo geral
+
+| Passo | Ação |
+|-------|------|
+| 1 | Clonar/abrir o repositório e instalar dependências (`pip install -r requirements.txt`). |
+| 2 | Garantir dados processados (ETL roda ao abrir o painel ou via botão na barra lateral). |
+| 3 | Para ML (funcionalidades 2 e 3), executar `run_educational_ml_suite()` (comando acima). |
+| 4 | Na raiz: `streamlit run dashboard/app.py`. |
+| 5 | Navegar pelas seções na **barra lateral** → **“Secoes do painel”**. |
+
+### Mapa funcionalidade → tela
+
+| Funcionalidade | Seção do painel | Blocos principais |
+|----------------|-----------------|-------------------|
+| **1. Diagnóstico** | Páginas **1–4** | Métricas, score, evolução, pandemia, correlações (ver tabelas em cada seção acima). |
+| **2. Priorização** | Página **5** → *Apoio inteligente* | Modelo final, métricas, ranking das 15 maiores previsões de abandono. |
+| **3. Explicação e perfis** | Página **5** → *Apoio inteligente* | Árvore, expander de regras, KNN, KMeans. |
+
+### Fluxo sugerido para o gestor
+
+1. **Contexto Geral (pág. 1)** — entender o score e os números do ano corrente.  
+2. **Evolução (pág. 2)** e **Pandemia (pág. 3)** — ver tendência e choque externo.  
+3. **Por que evadem (pág. 4)** — validar a cadeia de indicadores.  
+4. **Conclusões e Modelo Preditivo (pág. 5)** — rolar até *Apoio inteligente* para priorizar, explicar e segmentar.
 
 **Documentação formal do problema:** `docs/definicao_problema_e_escopo.md`  
 **Plano de dados:** `docs/plano_tecnico_dados.md`

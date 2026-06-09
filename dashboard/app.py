@@ -4,6 +4,7 @@ Execute com:  python -m streamlit run dashboard/app.py
 """
 
 import json
+import pickle
 import sys
 from pathlib import Path
 
@@ -42,6 +43,17 @@ st.markdown("""
 ROOT = Path(__file__).resolve().parent.parent
 PROC = ROOT / "data" / "processed"
 ML_OUT = ROOT / "outputs" / "ml"
+
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from ml.scenario_simulation import (  # noqa: E402
+    SIMULATABLE_FEATURES,
+    baseline_value,
+    build_intervention_narrative,
+    classify_pred_abandono,
+    predict_abandono_row,
+)
 
 COR_PRIMARIA = "#1E3A5F"
 COR_EF       = "#2563EB"
@@ -82,6 +94,7 @@ GLOSSARIO = {
     "Score de Risco":        "Indicador de 0 a 100: pesos 40% abandono EM, 30% TDI EM, 30% reprovação EM. Se algum componente estiver ausente, os pesos são renormalizados sobre os disponíveis (não se assume zero). Quanto maior o score, maior o risco.",
     "Sem dado":               "Indicador ou taxa não disponível na base para aquele registro — não equivale a valor zero nas classificações de risco.",
     "Modelo principal (ML)":  "HistGradientBoosting estima o abandono no EM por escola–ano; árvore e KNN complementam (regras e escolas semelhantes); KMeans agrupa perfis. Ver `ml/educational_ml.py` e `docs/definicao_problema_e_escopo.md`.",
+    "Simulação de cenários":  "Ferramenta «O que aconteceria se?» na página 5: altera indicadores (TDI, reprovação, ATU etc.) e recalcula a previsão de abandono com o mesmo modelo final, sem retreinamento.",
     "EJA":                   "Educação de Jovens e Adultos — modalidade para quem não concluiu o ensino regular na idade prevista.",
 }
 
@@ -1467,6 +1480,195 @@ def render_ml_inteligencia_section() -> None:
         )
 
 
+def render_simulacao_cenarios_section(dados: dict) -> None:
+    """Simulação what-if com o modelo final e ``predict_taxa_abandono_em``."""
+    st.divider()
+    st.markdown("### Simulacao de Cenarios e Impacto de Intervencoes")
+    st.markdown("#### O que aconteceria se?")
+    st.markdown(
+        "Esta ferramenta permite **simular intervenções** antes de implementá-las na rede. "
+        "Escolha uma escola e um ano, ajuste indicadores educacionais (TDI, reprovação, ATU, HAD etc.) "
+        "e veja como o **modelo final** reestimaria a **taxa de abandono no Ensino Médio**.\n\n"
+        "Os resultados são **simulações** baseadas nos padrões aprendidos pelo modelo a partir do histórico — "
+        "apoio ao planejamento e à tomada de decisão, **não** previsão causal garantida."
+    )
+
+    bundle_path = ML_OUT / "final_model_bundle.pkl"
+    if not bundle_path.exists():
+        st.warning(
+            "O modelo final ainda nao foi exportado. Execute na raiz do projeto:\n\n"
+            "`python -c \"from ml.educational_ml import run_educational_ml_suite; run_educational_ml_suite()\"`"
+        )
+        return
+
+    df_base = dados.get("fato_integrado")
+    if df_base is None or df_base.empty:
+        st.warning("Tabela `fato_integrado` indisponivel. Execute o ETL.")
+        return
+
+    try:
+        from ml.educational_ml import load_final_model_bundle
+
+        bundle = load_final_model_bundle(bundle_path)
+    except (OSError, pickle.UnpicklingError, KeyError, ModuleNotFoundError):
+        st.error("Nao foi possivel carregar o bundle do modelo final.")
+        return
+
+    feat_cols: list[str] = bundle["feature_columns"]
+    missing_cols = [c for c in feat_cols if c not in df_base.columns]
+    if missing_cols:
+        st.error("Colunas ausentes em `fato_integrado`: " + ", ".join(missing_cols))
+        return
+
+    df_opts = df_base.copy()
+    df_opts["_rotulo"] = df_opts.apply(
+        lambda r: f"Ano {int(r['ano'])} — Escola #{int(r['id_linha_educacional'])}",
+        axis=1,
+    )
+    df_opts = df_opts.sort_values(["ano", "id_linha_educacional"]).reset_index(drop=True)
+
+    if df_opts.empty:
+        st.warning("Nenhum registro escola–ano disponivel para simulacao.")
+        return
+
+    sel_idx = st.selectbox(
+        "Escola e ano (base fato_integrado)",
+        range(len(df_opts)),
+        format_func=lambda i: df_opts.loc[i, "_rotulo"],
+        key="sim_escola_ano",
+    )
+    baseline = df_opts.iloc[[sel_idx]].copy()
+    row = baseline.iloc[0]
+    escola_id = int(row["id_linha_educacional"])
+    ano_sel = int(row["ano"])
+
+    st.caption(
+        f"Registro selecionado: **escola #{escola_id}**, ano **{ano_sel}**. "
+        "A inferencia usa o mesmo pipeline e bundle das previsoes exportadas."
+    )
+
+    try:
+        pred_original = predict_abandono_row(baseline[feat_cols])
+    except (ValueError, KeyError) as exc:
+        st.error(f"Erro na previsao original: {exc}")
+        return
+
+    obs_ab = row.get("taxa_abandono_em")
+    if pd.notna(obs_ab):
+        st.info(
+            f"Abandono **observado** neste registro: **{float(obs_ab):.1f}%** | "
+            f"Previsao **original** do modelo: **{pred_original:.1f}%** "
+            f"(faixa: {classify_pred_abandono(pred_original)})."
+        )
+    else:
+        st.info(
+            f"Previsao **original** do modelo para este registro: **{pred_original:.1f}%** "
+            f"(faixa: {classify_pred_abandono(pred_original)})."
+        )
+
+    st.markdown("##### Indicadores simulaveis")
+    st.caption("Ajuste os valores abaixo; a previsao e recalculada automaticamente a cada alteracao.")
+
+    modified = baseline.copy()
+    changes: list[tuple[str, float, float, str, str]] = []
+    sim_features = [f for f in SIMULATABLE_FEATURES if f in modified.columns]
+
+    n_cols = 2
+    cols = st.columns(n_cols)
+    for i, feat in enumerate(sim_features):
+        meta = SIMULATABLE_FEATURES[feat]
+        start = baseline_value(row, feat, meta)
+        col = cols[i % n_cols]
+        with col:
+            new_val = st.slider(
+                meta["label"],
+                min_value=float(meta["min"]),
+                max_value=float(meta["max"]),
+                value=float(start),
+                step=float(meta["step"]),
+                key=f"sim_slider_{feat}_{escola_id}_{ano_sel}",
+            )
+        modified.at[modified.index[0], feat] = new_val
+        if abs(new_val - start) > 1e-6:
+            changes.append((feat, start, new_val, meta["label"], str(meta.get("unit", ""))))
+
+    try:
+        pred_simulated = predict_abandono_row(modified[feat_cols])
+    except (ValueError, KeyError) as exc:
+        st.error(f"Erro na previsao simulada: {exc}")
+        return
+
+    delta_pp = pred_simulated - pred_original
+    ganhou = delta_pp < -0.01
+    perdeu = delta_pp > 0.01
+
+    st.markdown("##### Resultado da simulacao")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Previsao original", f"{pred_original:.2f}%")
+    m2.metric(
+        "Previsao simulada",
+        f"{pred_simulated:.2f}%",
+        delta=f"{delta_pp:+.2f} p.p.",
+        delta_color="inverse",
+    )
+    m3.metric("Diferenca (simulada − original)", f"{delta_pp:+.2f} p.p.")
+    if ganhou:
+        m4.metric("Efeito estimado", "Reducao de risco", delta="Ganho", delta_color="normal")
+    elif perdeu:
+        m4.metric("Efeito estimado", "Aumento de risco", delta="Perda", delta_color="inverse")
+    else:
+        m4.metric("Efeito estimado", "Impacto neutro")
+
+    fig_cmp = go.Figure(
+        data=[
+            go.Bar(
+                x=["Previsao original", "Previsao simulada"],
+                y=[pred_original, pred_simulated],
+                marker_color=[COR_PRIMARIA, COR_OK if ganhou else (COR_EM if perdeu else COR_CINZA)],
+                text=[f"{pred_original:.1f}%", f"{pred_simulated:.1f}%"],
+                textposition="outside",
+            )
+        ]
+    )
+    fig_cmp.update_layout(
+        title="Abandono previsto — cenario atual vs. simulado",
+        yaxis_title="Taxa de abandono prevista (%)",
+        height=360,
+        margin=dict(t=50, b=40),
+        showlegend=False,
+    )
+    if pred_original > 0 or pred_simulated > 0:
+        ymax = max(pred_original, pred_simulated, 1.0) * 1.25
+        fig_cmp.update_yaxes(range=[0, ymax])
+    st.plotly_chart(fig_cmp, use_container_width=True)
+
+    narrativa = build_intervention_narrative(changes, pred_original, pred_simulated)
+    st.markdown("##### Interpretacao automatica")
+    if ganhou:
+        st.success(narrativa)
+    elif perdeu:
+        st.warning(narrativa)
+    else:
+        st.info(narrativa)
+
+    with st.expander("Valores atuais vs. simulados (indicadores alterados)"):
+        if changes:
+            tab_alt = pd.DataFrame(
+                [
+                    {
+                        "Indicador": lbl,
+                        "Valor original": round(old, 2),
+                        "Valor simulado": round(new, 2),
+                        "Variacao": round(new - old, 2),
+                    }
+                    for _f, old, new, lbl, _u in changes
+                ]
+            )
+            st.dataframe(tab_alt, use_container_width=True, hide_index=True)
+        else:
+            st.caption("Nenhum indicador foi modificado em relacao ao registro selecionado.")
+
+
 # ===========================================================================
 # PAGINA 5 — CONCLUSÕES E MODELO PREDITIVO
 # ===========================================================================
@@ -1680,6 +1882,8 @@ def pagina_conclusoes(dados: dict, filtros: dict, ins: dict):
     st.divider()
 
     render_ml_inteligencia_section()
+
+    render_simulacao_cenarios_section(dados)
 
     # Simulacao simples como prévia
     with st.expander("Ver projecao simplificada (tendencia linear — apenas indicativa)"):

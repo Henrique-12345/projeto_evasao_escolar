@@ -884,6 +884,8 @@ def run_educational_ml_suite(
     tree_text = tree_interpretation_summary(dt, feat_names, max_depth_display=3)
     narrative_cmp = regression_comparison_narrative(metrics_by_model)
 
+    from ml.scenario_simulation import STORYTELLING_SIMULACAO
+
     similar_test0 = knn_similar_rows(
         knn, X_train, X_test.iloc[[0]], train_df.reset_index(drop=True), n_neighbors=min(5, len(X_train))
     )
@@ -930,6 +932,7 @@ def run_educational_ml_suite(
             "narrativa_comparacao_regressao": narrative_cmp,
             "kmeans_interpretacao": prof_text,
             "arvore_regras_resumo": tree_text,
+            "simulacao_cenarios": STORYTELLING_SIMULACAO,
         }
         (ML_OUT / "ml_storytelling.json").write_text(
             json.dumps(meta, ensure_ascii=False, indent=2),

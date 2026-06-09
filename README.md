@@ -29,7 +29,8 @@ projeto_evasao_escolar/
 ├── ml/
 │   ├── __init__.py
 │   ├── baseline_municipio.py    # Pré-processamento + regressores (HGB, árvore, KNN) + ausentes (Ridge)
-│   └── educational_ml.py        # Suite: comparação, KMeans, vizinhos, export para dashboard
+│   ├── educational_ml.py        # Suite: comparação, KMeans, vizinhos, export para dashboard
+│   └── scenario_simulation.py   # Simulação what-if e narrativa de intervenções
 ├── notebooks/
 │   ├── modelagem_evasao_municipio.ipynb
 │   └── analyse_missing_values.ipynb   # Qualidade de dados e relatório de ausentes
@@ -170,7 +171,7 @@ O dashboard é organizado como uma **narrativa em 5 seções**, projetada para c
 | 2. Evolução ao Longo do Tempo | Como o problema mudou ano a ano? | Série temporal de evasão e abandono, variação anual, comparação EF × EM, boxplots por período histórico |
 | 3. Impacto da Pandemia | Por que 2020–2021 foram tão ruins? | Explicação dos 3 mecanismos (fechamento, ensino remoto, crise econômica), score antes/durante/após, comparação de indicadores por período |
 | 4. Por que os Alunos Evadem? | Quais são as causas? | Cadeia causal (reprovação → TDI → abandono → evasão), correlações com scatter e tendência, diagnóstico por indicador, mapa de correlação |
-| 5. Conclusões e Modelo Preditivo | O que fazer? Quais variáveis usar no modelo? | 5 insights consolidados, tabela de preditores para ML (com alvo formal: abandono EM em escola–ano), plano de ação por urgência, projeção simplificada |
+| 5. Conclusões e Modelo Preditivo | O que fazer? Quais variáveis usar no modelo? | 5 insights consolidados, plano de ação por urgência, **Apoio inteligente** (ML), **Simulação «O que aconteceria se?»**, projeção linear indicativa |
 
 **Princípios do dashboard:**
 - **Texto antes de cada gráfico** — explica o que será analisado e qual é o insight principal
@@ -179,7 +180,8 @@ O dashboard é organizado como uma **narrativa em 5 seções**, projetada para c
 - **Score de Risco 0–100** — Abandono EM (40%) + TDI (30%) + Reprovação EM (30%); pesos renormalizados se algum componente estiver ausente
 - **Período padrão de 4 anos** (últimos 4 disponíveis), ajustável pelo usuário
 - **Glossário na barra lateral** com definições de todos os termos técnicos
-- **Seção de Machine Learning** — tabela de variáveis preditoras e placeholder para modelo futuro
+- **Seção de Machine Learning** — comparação de regressores, modelo final, validação e ranking de risco
+- **Simulação de cenários** — sliders para TDI, reprovação, ATU etc.; recalcula abandono previsto com o modelo final (`ml/scenario_simulation.py`)
 
 **Filtros disponíveis:**
 - Período de análise (slider — padrão: últimos 4 anos)
@@ -248,6 +250,7 @@ Definição formal: `docs/definicao_problema_e_escopo.md`.
 |---|---|
 | `ml/baseline_municipio.py` | `fato_integrado`, `ColumnTransformer` + `Pipeline`, **HistGradientBoosting**, **DecisionTree**, **KNN**, split temporal; análise de ausentes ainda com **Ridge** |
 | `ml/educational_ml.py` | Suite completa: comparação dos três regressores, **RandomizedSearchCV** do HGB, **TimeSeriesSplit** por ano, **permutation importance**, **KMeans**, função de inferência (`predict_taxa_abandono_em`), bundle final `.pkl`, CSV/JSON em `outputs/ml/`, figuras em `outputs/figures/` |
+| `ml/scenario_simulation.py` | Simulação what-if no dashboard: altera indicadores escola–ano e reutiliza `predict_taxa_abandono_em()`; narrativa automática de impacto |
 | `notebooks/modelagem_evasao_municipio.ipynb` | EDA, baseline HGB (§5), comparação (§7), tuning + validação cruzada temporal + inferência do modelo final |
 
 A função **`run_missing_impact_analysis`** (mesmo módulo) compara métricas do Ridge **com todas as features** versus **sem colunas muito incompletas** (taxa de ausência no treino acima de um limiar, por padrão 50%). Isso ajuda a avaliar sensibilidade do modelo à imputação e à presença de covariáveis esparsas — sem substituir o desenho principal baseado no Pipeline completo.
@@ -257,6 +260,8 @@ A função **`run_missing_impact_analysis`** (mesmo módulo) compara métricas d
 **Métricas reportadas:** MAE (principal), RMSE e R² no conjunto de teste, além de média / desvio por fold na validação cruzada temporal.
 
 **Inferência mínima:** `ml.educational_ml.predict_taxa_abandono_em(...)` carrega o bundle salvo em `outputs/ml/final_model_bundle.pkl` e prevê `taxa_abandono_em` para novos dados com as mesmas features do pipeline.
+
+**Simulação de cenários (dashboard):** na página 5, seção *O que aconteceria se?* — selecione escola/ano, ajuste indicadores com sliders e compare previsão original vs. simulada (mesmo fluxo de inferência, sem retreinamento). Ver `docs/historias_epicas_p6.md` (funcionalidade 4).
 
 Execute o Jupyter a partir da **raiz do repositório**:
 

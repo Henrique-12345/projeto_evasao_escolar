@@ -318,8 +318,9 @@ pred = predict_taxa_abandono_em(df_novas_linhas)
 **Integração ao produto (dashboard)**
 
 - **`dashboard/app.py`** → `render_ml_inteligencia_section()` (página 5 — *Apoio inteligente*).
+- **`dashboard/app.py`** → `render_simulacao_cenarios_section()` (página 5 — *O que aconteceria se?*): simulação what-if com sliders, reutilizando `predict_taxa_abandono_em()` e o bundle serializado.
 - Lê `outputs/ml/ml_storytelling.json`, CSVs e figuras geradas pela suite.
-- Exibe métricas, tuning, CV, árvore, KNN, KMeans e ranking — **sem exigir que o gestor execute Python**.
+- Exibe métricas, tuning, CV, árvore, KNN, KMeans, ranking e **simulação de intervenções** — **sem exigir que o gestor execute Python**.
 
 **O que não foi implementado**
 
@@ -389,7 +390,7 @@ Problema, pipeline, algoritmos, critério de escolha do modelo final, resultados
 | Algoritmos e papéis | `ml/educational_ml.py` (docstring), notebook de modelagem |
 | Critério do modelo final | HGB após RandomizedSearchCV; MAE na CV temporal; uso em ranking |
 | Resultados numéricos | `outputs/ml/ml_storytelling.json`, CSVs, figuras |
-| Integração ao produto | `dashboard/app.py`, `docs/historias_epicas_p6.md` (três funcionalidades para o gestor) |
+| Integração ao produto | `dashboard/app.py`, `docs/historias_epicas_p6.md` (quatro funcionalidades, incl. simulação) |
 | Narrativa em linguagem acessível | `narrativa_comparacao_regressao`, `kmeans_interpretacao`, `arvore_regras_resumo` no JSON |
 
 **Coerência metodológica**
@@ -424,7 +425,8 @@ ml/baseline_municipio.py            → Requisitos 3, 4, 5
 ml/educational_ml.py                → Requisitos 5–9
 outputs/ml/*.csv, *.json, *.pkl     → Requisitos 5–9
 dashboard/app.py                    → Requisitos 8, 10
-docs/historias_epicas_p6.md         → Requisito 10 (produto)
+docs/historias_epicas_p6.md         → Requisito 10 (produto + simulação)
+ml/scenario_simulation.py           → Requisito 8 (inferência interativa)
 ```
 
 ---

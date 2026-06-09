@@ -1,26 +1,33 @@
-# Relatório das três funcionalidades do sistema
+# Relatório das funcionalidades do sistema
 
 **Projeto:** Evasão escolar — Recife (PE)  
 **Usuário-alvo:** gestores que querem prevenir abandono e evasão escolar  
 **Granularidade dos dados:** uma linha por escola e ano (`fato_integrado`)  
 **Alvo da modelagem preditiva:** `taxa_abandono_em` (abandono no Ensino Médio, %)
 
-Este relatório descreve as **três funcionalidades relevantes** do sistema: o que são, o que fazem, como ajudam a resolver o problema do gestor e **como foram implementadas** no repositório.
+Este relatório descreve as **quatro funcionalidades relevantes** do sistema: o que são, o que fazem, como ajudam a resolver o problema do gestor e **como foram implementadas** no repositório.
 
 ---
 
-## Visão geral
+## Visão geral — quatro camadas de valor
 
-O sistema não é apenas “um modelo de machine learning”. Ele combina:
+O sistema combina diagnóstico, priorização preditiva, explicação de perfis e **simulação de cenários**:
 
-| Camada | Papel |
+| Camada | Funcionalidade | Usa ML? |
+|--------|----------------|---------|
+| 1 | **Diagnóstico** — entender o cenário | Não (regras + EDA) |
+| 2 | **Priorização** — quem atender primeiro | Sim (HGB ajustado) |
+| 3 | **Explicação e perfis** — porquês e segmentos | Sim (árvore, KNN, KMeans) |
+| 4 | **Simulação de cenários** — “o que aconteceria se?” | Sim (inferência do modelo final) |
+
+| Camada técnica | Papel |
 |--------|--------|
 | **ETL** (`etl/etl_pipeline.py`) | Organiza dados brutos em tabelas usáveis |
 | **Análise exploratória** (`analise_evasao_escolar.ipynb`, notebooks) | Contextualiza o problema |
-| **Machine learning** (`ml/baseline_municipio.py`, `ml/educational_ml.py`) | Prevê, compara e segmenta |
+| **Machine learning** (`ml/baseline_municipio.py`, `ml/educational_ml.py`, `ml/scenario_simulation.py`) | Prevê, compara, segmenta e simula |
 | **Dashboard** (`dashboard/app.py`) | Traduz resultados para decisão educacional |
 
-As três funcionalidades abaixo correspondem ao que o gestor **usa de fato** para decidir.
+As quatro funcionalidades abaixo correspondem ao que o gestor **usa de fato** para decidir e planejar intervenções.
 
 ---
 
@@ -289,7 +296,65 @@ Usa a **mesma página** da Funcionalidade 2: **“5. Conclusoes e Modelo Prediti
 
 ---
 
-## Como as três funcionalidades se conectam
+## Funcionalidade 4 — Simulação de cenários e impacto de intervenções
+
+### O que é
+
+É a ferramenta **“O que aconteceria se?”**: permite que o gestor **altere indicadores educacionais** de uma escola–ano e veja como o **modelo final** reestimaria a taxa de abandono no EM — **sem retreinar** o modelo.
+
+Responde: *“Se reduzirmos a reprovação ou a TDI nesta escola, quanto o risco previsto de abandono tende a cair?”*
+
+### O que faz
+
+- Seleção de **escola e ano** disponíveis em `fato_integrado`.
+- Exibição da **previsão original** do modelo para o registro.
+- **Sliders** para ajustar TDI, reprovação, aprovação, repetência, abandono EF, ATU, HAD e indicadores EF relacionados.
+- **Recálculo automático** via `predict_taxa_abandono_em()` a cada alteração.
+- Comparação **original × simulada** e **diferença em p.p.**
+- Indicadores visuais de **ganho** ou **perda** de risco e gráfico de barras.
+- **Texto interpretativo automático** (ex.: impacto de reduzir reprovação de 18% para 10%).
+
+### Como ajuda a resolver o problema do gestor
+
+| Necessidade do gestor | Como a funcionalidade ajuda |
+|----------------------|------------------------------|
+| Avaliar políticas antes de aplicar | Simula efeito estimado no abandono previsto |
+| Comparar estratégias (TDI vs. reprovação) | Ajusta indicadores isoladamente ou em conjunto |
+| Comunicar impacto esperado | Narrativa automática + métricas claras |
+| Manter coerência com o modelo do projeto | Usa o **mesmo bundle** e pipeline das previsões oficiais |
+
+### Como foi implementada
+
+| Componente | Caminho |
+|------------|---------|
+| Lógica de simulação e narrativa | `ml/scenario_simulation.py` |
+| Inferência (sem retreino) | `ml/educational_ml.py` → `predict_taxa_abandono_em()` |
+| Interface no dashboard | `dashboard/app.py` → `render_simulacao_cenarios_section()` |
+| Storytelling exportado | chave `simulacao_cenarios` em `outputs/ml/ml_storytelling.json` (após `run_educational_ml_suite()`) |
+
+**Fluxo técnico:** carrega linha de `fato_integrado` → previsão baseline → aplica alterações nos indicadores simuláveis → `predict_taxa_abandono_em(modified)` → exibe delta e `build_intervention_narrative()`.
+
+**Limitação honesta:** simulação reflete **associações aprendidas** no histórico, não efeito causal garantido; mudanças simultâneas em muitos indicadores podem extrapolar padrões não vistos no treino.
+
+### Como visualizar no dashboard
+
+1. Pré-requisito: `run_educational_ml_suite()` (bundle em `outputs/ml/final_model_bundle.pkl`).
+2. Abrir `streamlit run dashboard/app.py`.
+3. Página **“5. Conclusoes e Modelo Preditivo”**.
+4. Role **após** o bloco *Apoio inteligente* até **“Simulacao de Cenarios e Impacto de Intervencoes”**.
+5. Subseção **“O que aconteceria se?”** — escolha escola/ano, ajuste sliders, leia métricas e interpretação.
+
+| Elemento na tela | Conteúdo |
+|------------------|----------|
+| Seletor escola–ano | Registros de `fato_integrado` |
+| Sliders | Indicadores simuláveis (TDI, reprovação, ATU, HAD, etc.) |
+| Métricas | Previsão original, simulada, diferença (p.p.), efeito (ganho/perda) |
+| Gráfico | Barras — cenário atual vs. simulado |
+| Texto | Interpretação automática da simulação |
+
+---
+
+## Como as funcionalidades se conectam
 
 ```mermaid
 flowchart LR
@@ -307,22 +372,29 @@ flowchart LR
     KNN_alg[KNN]
     KM[KMeans]
   end
+  subgraph f4 [Funcionalidade 4]
+    SIM[Simulacao what-if]
+  end
   ETL --> DASH
   ETL --> HGB
   ETL --> TREE
   ETL --> KNN_alg
   ETL --> KM
+  ETL --> SIM
   HGB --> DASH
+  HGB --> SIM
   TREE --> DASH
   KNN_alg --> DASH
   KM --> DASH
+  SIM --> DASH
 ```
 
 Fluxo típico de uso pelo gestor:
 
 1. **Diagnóstico** — entende o problema na cidade e na cadeia de indicadores.  
 2. **Priorização** — vê quem o modelo indica como maior risco de abandono previsto.  
-3. **Explicação e perfis** — entende porquês e com quem comparar, e quais grupos existem.
+3. **Explicação e perfis** — entende porquês e com quem comparar, e quais grupos existem.  
+4. **Simulação** — testa “e se reduzirmos reprovação/TDI?” antes de implementar a intervenção.
 
 ---
 
@@ -334,7 +406,7 @@ Fluxo típico de uso pelo gestor:
 |-------|------|
 | 1 | Clonar/abrir o repositório e instalar dependências (`pip install -r requirements.txt`). |
 | 2 | Garantir dados processados (ETL roda ao abrir o painel ou via botão na barra lateral). |
-| 3 | Para ML (funcionalidades 2 e 3), executar `run_educational_ml_suite()` (comando acima). |
+| 3 | Para ML (funcionalidades 2, 3 e 4), executar `run_educational_ml_suite()` (comando acima). |
 | 4 | Na raiz: `streamlit run dashboard/app.py`. |
 | 5 | Navegar pelas seções na **barra lateral** → **“Secoes do painel”**. |
 
@@ -345,13 +417,14 @@ Fluxo típico de uso pelo gestor:
 | **1. Diagnóstico** | Páginas **1–4** | Métricas, score, evolução, pandemia, correlações (ver tabelas em cada seção acima). |
 | **2. Priorização** | Página **5** → *Apoio inteligente* | Modelo final, métricas, ranking das 15 maiores previsões de abandono. |
 | **3. Explicação e perfis** | Página **5** → *Apoio inteligente* | Árvore, expander de regras, KNN, KMeans. |
+| **4. Simulação de cenários** | Página **5** → *O que aconteceria se?* | Sliders, previsão original/simulada, gráfico, narrativa. |
 
 ### Fluxo sugerido para o gestor
 
 1. **Contexto Geral (pág. 1)** — entender o score e os números do ano corrente.  
 2. **Evolução (pág. 2)** e **Pandemia (pág. 3)** — ver tendência e choque externo.  
 3. **Por que evadem (pág. 4)** — validar a cadeia de indicadores.  
-4. **Conclusões e Modelo Preditivo (pág. 5)** — rolar até *Apoio inteligente* para priorizar, explicar e segmentar.
+4. **Conclusões e Modelo Preditivo (pág. 5)** — *Apoio inteligente* (priorizar e explicar) e **simulação de cenários** (testar intervenções).
 
 **Documentação formal do problema:** `docs/definicao_problema_e_escopo.md`  
 **Plano de dados:** `docs/plano_tecnico_dados.md`
@@ -360,10 +433,11 @@ Fluxo típico de uso pelo gestor:
 
 ## Conclusão
 
-As três funcionalidades formam um **sistema de apoio à decisão educacional**:
+As **quatro funcionalidades** formam um **sistema de apoio à decisão educacional**:
 
 1. **Diagnóstico** — entender o cenário (dashboard + score + narrativas).  
 2. **Priorização** — prever e ranquear risco de abandono (ML supervisionado com modelo final ajustado).  
-3. **Explicação e perfis** — explicar, comparar e segmentar (árvore, KNN, KMeans).
+3. **Explicação e perfis** — explicar, comparar e segmentar (árvore, KNN, KMeans).  
+4. **Simulação de cenários** — estimar impacto de intervenções no abandono previsto (inferência what-if).
 
-Juntas, permitem que o gestor **compreenda**, **priorize** e **justifique** ações de prevenção de abandono e evasão, com implementação reprodutível em código, notebooks executados e artefatos exportados para o dashboard.
+Juntas, permitem que o gestor **compreenda**, **priorize**, **justifique** e **planeje** ações de prevenção de abandono e evasão, com implementação reprodutível em código, notebooks executados e artefatos exportados para o dashboard.

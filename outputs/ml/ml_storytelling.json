@@ -56,5 +56,13 @@
     "secao_dashboard": "5. Conclusões e Modelo Preditivo — O que aconteceria se?",
     "proposito": "Permite que gestores alterem indicadores educacionais de uma escola–ano e vejam como o modelo final reestimaria a taxa de abandono no EM, apoiando o planejamento de intervenções antes da implementação na prática.",
     "camada_valor": "Quarta camada da solução: além de diagnosticar, priorizar e explicar perfis, o sistema simula cenários futuros com o mesmo pipeline de inferência já validado."
+  },
+  "mlflow": {
+    "experiment_name": "evasao_escolar_escola_ano",
+    "tracking_uri": "sqlite:////home/fatima/Henrique_projetos/projeto_evasao_escolar/mlruns/mlflow.db",
+    "parent_run_id": "383604ae63df4d8aa34d06a936caefbd",
+    "final_run_id": "bdbfe67ad00f445bb266f76fbbc5fd15",
+    "registered_model_name": "evasao_abandono_em_final",
+    "ui_command": "bash scripts/mlflow_ui.sh"
   }
 }

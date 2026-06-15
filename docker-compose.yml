@@ -1,0 +1,29 @@
+# Uso: docker compose up dashboard
+# Requer CSVs em ./data/raw/ (montados abaixo)
+
+services:
+  dashboard:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./mlruns:/app/mlruns
+      - ./outputs:/app/outputs
+    command: ["dashboard"]
+
+  mlflow:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlruns:/app/mlruns
+    command: ["mlflow-ui"]
+
+  train:
+    build: .
+    volumes:
+      - ./data:/app/data
+      - ./mlruns:/app/mlruns
+      - ./outputs:/app/outputs
+    command: ["train"]

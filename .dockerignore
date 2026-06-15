@@ -1,0 +1,15 @@
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.git/
+.gitignore
+.cursor/
+.jupyter/
+.ipynb_checkpoints/
+*.db
+.streamlit/
+.DS_Store
+Thumbs.db
+*.log

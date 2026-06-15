@@ -1,3 +1,9 @@
+# ── MLflow (gerado localmente; mantém pasta no repo) ─────────────────────────
+mlruns/*
+!mlruns/.gitkeep
+!mlruns/experimentos_mlflow_parametros.ipynb
+mlruns/mlflow.db
+
 # ── Python ──────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]

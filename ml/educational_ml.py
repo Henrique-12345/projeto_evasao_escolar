@@ -724,12 +724,14 @@ def run_educational_ml_suite(
     permutation_repeats: int = 8,
     tuning_iter: int = 18,
     cv_splits: int = 4,
+    use_mlflow: bool = True,
 ) -> dict[str, Any]:
     """
     Executa treino/avaliação dos três regressores, segmentação KMeans e exporta artefatos.
 
     Grava em ``outputs/ml/`` (CSV + JSON) e figuras em ``outputs/figures/`` quando
-    ``save_artifacts=True``.
+    ``save_artifacts=True``. Com ``use_mlflow=True``, registra parâmetros, métricas e
+    modelos em ``mlruns/`` (MLflow).
     """
     _ensure_dirs()
     S = prepare_temporal_supervised_split(year_cutoff=year_cutoff)
@@ -916,29 +918,6 @@ def run_educational_ml_suite(
             )
         )
 
-        meta = {
-            "year_cutoff": year_cutoff,
-            "target": TARGET,
-            "metrics": metrics_by_model,
-            "final_model_name": "HistGradientBoostingRegressor (ajustado)",
-            "final_model_test_metrics": final_test_metrics,
-            "final_model_best_params": tuning["best_params"],
-            "final_model_best_cv_mae": tuning["best_cv_mae"],
-            "final_model_cv_summary": cv_summary,
-            "final_model_cv_diagnosis": cv_diagnosis,
-            "final_model_inference_function": "ml.educational_ml.predict_taxa_abandono_em",
-            "final_model_bundle_path": bundle_path,
-            "kmeans_k": best_k,
-            "narrativa_comparacao_regressao": narrative_cmp,
-            "kmeans_interpretacao": prof_text,
-            "arvore_regras_resumo": tree_text,
-            "simulacao_cenarios": STORYTELLING_SIMULACAO,
-        }
-        (ML_OUT / "ml_storytelling.json").write_text(
-            json.dumps(meta, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-
         fig_paths.extend(
             plot_hgb_risk_and_importance(y_test, pred_hgb_te, imp, FIG_OUT, show=show_plots)
         )
@@ -982,6 +961,72 @@ def run_educational_ml_suite(
             )
         )
 
+    mlflow_info: dict[str, Any] | None = None
+    if use_mlflow:
+        try:
+            from ml.mlflow_tracking import log_educational_ml_suite_to_mlflow
+
+            mlflow_info = log_educational_ml_suite_to_mlflow(
+                suite_params={
+                    "year_cutoff": year_cutoff,
+                    "tree_max_depth": tree_max_depth,
+                    "knn_neighbors": knn_neighbors,
+                    "random_state": random_state,
+                    "tuning_iter": tuning_iter,
+                    "cv_splits": cv_splits,
+                    "permutation_repeats": permutation_repeats,
+                },
+                metrics_by_model=metrics_by_model,
+                final_test_metrics=final_test_metrics,
+                final_best_params=tuning["best_params"],
+                final_best_cv_mae=tuning["best_cv_mae"],
+                cv_summary=cv_summary,
+                fitted_pipelines=fitted,
+                final_model_allfit=final_model_allfit,
+                X_train=X_train,
+                y_train=y_train,
+                figure_paths=[str(p) for p in fig_paths],
+                artifact_json_path=None,
+                kmeans_k=best_k,
+            )
+        except Exception as exc:  # noqa: BLE001 — MLflow não deve abortar a suite
+            mlflow_info = {"error": str(exc)}
+
+    if save_artifacts:
+        meta = {
+            "year_cutoff": year_cutoff,
+            "target": TARGET,
+            "metrics": metrics_by_model,
+            "final_model_name": "HistGradientBoostingRegressor (ajustado)",
+            "final_model_test_metrics": final_test_metrics,
+            "final_model_best_params": tuning["best_params"],
+            "final_model_best_cv_mae": tuning["best_cv_mae"],
+            "final_model_cv_summary": cv_summary,
+            "final_model_cv_diagnosis": cv_diagnosis,
+            "final_model_inference_function": "ml.educational_ml.predict_taxa_abandono_em",
+            "final_model_bundle_path": bundle_path,
+            "kmeans_k": best_k,
+            "narrativa_comparacao_regressao": narrative_cmp,
+            "kmeans_interpretacao": prof_text,
+            "arvore_regras_resumo": tree_text,
+            "simulacao_cenarios": STORYTELLING_SIMULACAO,
+        }
+        if mlflow_info and "error" not in mlflow_info:
+            meta["mlflow"] = {
+                "experiment_name": mlflow_info.get("experiment_name"),
+                "tracking_uri": mlflow_info.get("tracking_uri"),
+                "parent_run_id": mlflow_info.get("parent_run_id"),
+                "final_run_id": mlflow_info.get("final_run_id"),
+                "registered_model_name": mlflow_info.get("registered_model_name"),
+                "ui_command": "bash scripts/mlflow_ui.sh",
+            }
+        elif mlflow_info and mlflow_info.get("error"):
+            meta["mlflow"] = {"error": mlflow_info["error"]}
+        (ML_OUT / "ml_storytelling.json").write_text(
+            json.dumps(meta, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
     return {
         "target": TARGET,
         "year_cutoff": year_cutoff,
@@ -1022,4 +1067,5 @@ def run_educational_ml_suite(
         "tuning_results_table": tuning["results_table"],
         "artifact_dir": str(ML_OUT) if save_artifacts else None,
         "figure_paths": [str(p) for p in fig_paths] if save_artifacts else [],
+        "mlflow": mlflow_info,
     }

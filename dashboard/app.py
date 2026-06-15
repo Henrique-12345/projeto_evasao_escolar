@@ -1479,6 +1479,21 @@ def render_ml_inteligencia_section() -> None:
             f"e bundle salvo em `{meta.get('final_model_bundle_path', 'outputs/ml/final_model_bundle.pkl')}`."
         )
 
+    mlflow_meta = meta.get("mlflow") or {}
+    if mlflow_meta and "error" not in mlflow_meta:
+        st.markdown("##### Rastreamento MLflow (MLOps)")
+        st.caption(
+            f"Experimento: **{mlflow_meta.get('experiment_name', 'evasao_escolar_escola_ano')}** · "
+            f"URI: `{mlflow_meta.get('tracking_uri', 'mlruns')}` · "
+            f"Modelo registrado: `{mlflow_meta.get('registered_model_name', 'evasao_abandono_em_final')}`"
+        )
+        st.info(
+            "Visualize runs, metricas e artefatos com: "
+            "`bash scripts/mlflow_ui.sh` ou `docker compose up mlflow` (porta 5000)."
+        )
+    elif mlflow_meta.get("error"):
+        st.caption(f"MLflow: {mlflow_meta['error']}")
+
 
 def render_simulacao_cenarios_section(dados: dict) -> None:
     """Simulação what-if com o modelo final e ``predict_taxa_abandono_em``."""

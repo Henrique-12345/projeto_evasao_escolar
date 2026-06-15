@@ -1,6 +1,79 @@
 # Análise de Evasão Escolar — Recife
 
-Projeto de análise de dados sobre **evasão e abandono escolar no Ensino Fundamental e Ensino Médio** na cidade do Recife (PE), utilizando dados do INEP/MEC.
+**Nome da solução:** `projeto_evasao_escolar`  
+**Instituição:** [CESAR School](https://www.cesar.school/)  
+**Disciplinas:** Aprendizado de Máquina · Projeto 6  
+**Site do projeto (Google Sites):** [G15 — Evasão Escolar](https://sites.google.com/cesar.school/g15-evasoescolar/in%C3%ADcio?authuser=0)
+
+### Equipe
+
+| Nome | GitHub |
+|------|--------|
+| Henrique | [@Henrique-12345](https://github.com/Henrique-12345) |
+
+> *Inclua aqui os demais integrantes do grupo G15, se aplicável.*
+
+---
+
+Projeto de análise de dados sobre **evasão e abandono escolar no Ensino Fundamental e Ensino Médio** na cidade do Recife (PE), utilizando dados do INEP/MEC. A solução integra **EDA**, **modelagem com validação temporal**, **MLflow (MLOps)**, **dashboard Streamlit** e **execução reprodutível via Docker**.
+
+---
+
+## Execução rápida (Aprendizado de Máquina)
+
+### Opção A — Docker (recomendado para reprodutibilidade)
+
+Pré-requisito: [Docker](https://docs.docker.com/get-docker/) e [Docker Compose](https://docs.docker.com/compose/).
+
+1. Coloque os CSVs em `data/raw/` (ver seção [Bases de Dados](#bases-de-dados)).
+2. Na raiz do repositório:
+
+```bash
+# Build da imagem
+docker build -t projeto_evasao_escolar .
+
+# Dashboard (ETL + treino ML + Streamlit na porta 8501)
+docker compose up dashboard
+
+# Ou manualmente:
+docker run --rm -p 8501:8501 \
+  -v "$(pwd)/data:/app/data" \
+  -v "$(pwd)/mlruns:/app/mlruns" \
+  -v "$(pwd)/outputs:/app/outputs" \
+  projeto_evasao_escolar dashboard
+```
+
+3. **MLflow UI** (experimentos, métricas e modelos registrados):
+
+```bash
+docker compose up mlflow
+# Acesse http://localhost:5000
+```
+
+4. **Somente treino + MLflow** (sem dashboard):
+
+```bash
+docker compose run --rm train
+```
+
+### Opção B — Ambiente local (Python)
+
+```bash
+pip install -r requirements.txt
+python etl/etl_pipeline.py
+python -c "from ml.educational_ml import run_educational_ml_suite; run_educational_ml_suite()"
+mlflow ui --backend-store-uri mlruns   # http://localhost:5000
+bash scripts/mlflow_ui.sh              # recomendado (SQLite, MLflow 3+)
+streamlit run dashboard/app.py         # http://localhost:8501
+```
+
+O comando `run_educational_ml_suite()` registra automaticamente em **`mlruns/`**:
+- parâmetros da suite e hiperparâmetros do modelo final;
+- métricas de teste (MAE, RMSE, R²) por modelo;
+- **múltiplos runs** (comparação KNN / árvore / HGB + run do modelo final);
+- **modelos sklearn** serializados (incl. registro `evasao_abandono_em_final`).
+
+Desabilitar MLflow (opcional): `MLFLOW_DISABLED=1 python -c "..."`.
 
 ---
 
@@ -20,23 +93,32 @@ projeto_evasao_escolar/
 ├── data/
 │   ├── raw/                     # CSVs originais (não versionados)
 │   └── processed/               # Dados gerados pelo ETL (não versionados)
+├── docker/
+│   └── entrypoint.sh            # Entrypoint Docker (dashboard / train / mlflow-ui)
 ├── docs/
 │   ├── definicao_problema_e_escopo.md   # Problema de ML: alvo abandono EM × granularidade escola–ano
 │   ├── plano_tecnico_dados.md
-│   └── politica_dados_ausentes.md
-├── etl/
+│   ├── politica_dados_ausentes.md
+│   ├── historias_epicas_p6.md
+│   └── relatorio_p6.md
+├── etl/                         # ≡ src/ (dados) no enunciado AM
 │   └── etl_pipeline.py          # Pipeline ETL: Extract → Transform → Load
-├── ml/
+├── ml/                          # ≡ src/ (treinamento) no enunciado AM
 │   ├── __init__.py
 │   ├── baseline_municipio.py    # Pré-processamento + regressores (HGB, árvore, KNN) + ausentes (Ridge)
-│   ├── educational_ml.py        # Suite: comparação, KMeans, vizinhos, export para dashboard
+│   ├── educational_ml.py        # Suite: comparação, tuning, KMeans, MLflow, export dashboard
+│   ├── mlflow_tracking.py       # Rastreamento MLflow (parâmetros, métricas, modelos)
 │   └── scenario_simulation.py   # Simulação what-if e narrativa de intervenções
+├── mlruns/                      # Experimentos MLflow (mlflow.db + notebook de campanha)
+│   └── experimentos_mlflow_parametros.ipynb
 ├── notebooks/
 │   ├── modelagem_evasao_municipio.ipynb
 │   └── analyse_missing_values.ipynb   # Qualidade de dados e relatório de ausentes
-├── dashboard/
+├── dashboard/                   # ≡ app/ no enunciado AM
 │   └── app.py                   # Dashboard interativo (Streamlit + Plotly)
 ├── analise_evasao_escolar.ipynb
+├── Dockerfile
+├── docker-compose.yml
 ├── iniciar_dashboard.bat
 ├── requirements.txt
 └── README.md
@@ -249,13 +331,20 @@ Definição formal: `docs/definicao_problema_e_escopo.md`.
 | Artefato | Descrição |
 |---|---|
 | `ml/baseline_municipio.py` | `fato_integrado`, `ColumnTransformer` + `Pipeline`, **HistGradientBoosting**, **DecisionTree**, **KNN**, split temporal; análise de ausentes ainda com **Ridge** |
-| `ml/educational_ml.py` | Suite completa: comparação dos três regressores, **RandomizedSearchCV** do HGB, **TimeSeriesSplit** por ano, **permutation importance**, **KMeans**, função de inferência (`predict_taxa_abandono_em`), bundle final `.pkl`, CSV/JSON em `outputs/ml/`, figuras em `outputs/figures/` |
+| `ml/educational_ml.py` | Suite completa: comparação dos três regressores, **RandomizedSearchCV** do HGB, **TimeSeriesSplit** por ano, **MLflow**, função de inferência (`predict_taxa_abandono_em`), bundle final `.pkl`, CSV/JSON em `outputs/ml/`, figuras em `outputs/figures/` |
+| `ml/mlflow_tracking.py` | Integração **MLflow**: parâmetros, métricas, múltiplos runs aninhados, registro do modelo final em `mlruns/` |
+| `ml/mlflow_experiments.py` | Plano **EXPERIMENT_PLAN** (30 rodadas: 10× HGB, 10× árvore, 10× KNN); helpers de pipeline e registro MLflow; ver `mlruns/experimentos_mlflow_parametros.ipynb` |
+| `mlruns/experimentos_mlflow_parametros.ipynb` | **Treino explícito** no notebook: loop por algoritmo/hiperparâmetros + registro no experimento `evasao_treino_parametros` |
 | `ml/scenario_simulation.py` | Simulação what-if no dashboard: altera indicadores escola–ano e reutiliza `predict_taxa_abandono_em()`; narrativa automática de impacto |
 | `notebooks/modelagem_evasao_municipio.ipynb` | EDA, baseline HGB (§5), comparação (§7), tuning + validação cruzada temporal + inferência do modelo final |
 
 A função **`run_missing_impact_analysis`** (mesmo módulo) compara métricas do Ridge **com todas as features** versus **sem colunas muito incompletas** (taxa de ausência no treino acima de um limiar, por padrão 50%). Isso ajuda a avaliar sensibilidade do modelo à imputação e à presença de covariáveis esparsas — sem substituir o desenho principal baseado no Pipeline completo.
 
-**Validação:** treino nos anos `≤ 2017`, teste nos anos `≥ 2018` (split temporal). O modelo final usa **RandomizedSearchCV** no treino com **TimeSeriesSplit por ano**, seguido de avaliação no teste holdout e exportação para o dashboard via `python -c "from ml.educational_ml import run_educational_ml_suite; run_educational_ml_suite()"`.
+**Validação:** treino nos anos `≤ 2017`, teste nos anos `≥ 2018` (split temporal). O modelo final usa **RandomizedSearchCV** no treino com **TimeSeriesSplit por ano**, seguido de avaliação no teste holdout, exportação para o dashboard e **registro MLflow** via `python -c "from ml.educational_ml import run_educational_ml_suite; run_educational_ml_suite()"`.
+
+**MLflow:** após a suite, consulte `bash scripts/mlflow_ui.sh` ou `docker compose up mlflow`. Backend: `sqlite:///mlruns/mlflow.db`. Experimentos: `evasao_escolar_escola_ano` (suite principal) e `evasao_treino_parametros` (campanha do notebook com 30 runs); modelo registrado: `evasao_abandono_em_final`.
+
+> Se você registrou experimentos antes da migração para SQLite, rode novamente `run_educational_ml_suite()` para popular o banco.
 
 **Métricas reportadas:** MAE (principal), RMSE e R² no conjunto de teste, além de média / desvio por fold na validação cruzada temporal.
 

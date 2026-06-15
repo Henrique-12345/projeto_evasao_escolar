@@ -46,7 +46,7 @@
   },
   "final_model_cv_diagnosis": "Há **instabilidade temporal relevante**: os folds variam bastante e o erro em validação fica acima do treino. Isso sugere sensibilidade a mudanças de período e possível overfitting.",
   "final_model_inference_function": "ml.educational_ml.predict_taxa_abandono_em",
-  "final_model_bundle_path": "/home/fatima/Henrique_projetos/projeto_evasao_escolar/outputs/ml/final_model_bundle.pkl",
+  "final_model_bundle_path": "/app/outputs/ml/final_model_bundle.pkl",
   "kmeans_k": 3,
   "narrativa_comparacao_regressao": "Comparamos três modelos de regressão no mesmo período de teste (anos mais recentes). Todos estimam a taxa de abandono no Ensino Médio (%) por escola e ano.\n\nO menor erro médio absoluto (MAE) ficou com **DecisionTreeRegressor** (~0.53 pontos percentuais). Quanto menor o MAE, mais perto as previsões ficam dos valores observados.\n\n**HistGradientBoosting** costuma captar relações não lineares (combinações de indicadores) e tende a ter melhor desempenho preditivo quando há padrão nos dados.\n\n**Árvore de decisão** privilegia clareza: gera regras do tipo “se indicador X passa de um limite, o abandono tende a subir”. O erro costuma ser um pouco maior, mas a leitura para gestores é mais direta.\n\n**K vizinhos (KNN)** prevê olhando para escolas “parecidas” no passado recente — útil para comparar comunidades escolares semelhantes, não só para o número de MAE.\n\nEm números: a árvore teve MAE ~0.53 p.p.; use-a para explicar fatores de risco e o boosting para priorização numérica.",
   "kmeans_interpretacao": "**Grupo 1** — indicadores mais altos: atu_em (34.3), tdi_em (22.8), taxa_reprovacao_em (7.1); entre os mais baixos: taxa_abandono_em (1.8), taxa_repetencia_em (6.2).\n\n**Grupo 2** — indicadores mais altos: tdi_em (47.7), atu_em (36.9), taxa_abandono_em (13.7); entre os mais baixos: taxa_repetencia_em (10.6), taxa_reprovacao_em (12.6).\n\n**Grupo 3** — indicadores mais altos: tdi_em (35.8), taxa_reprovacao_em (26.8), atu_em (25.7); entre os mais baixos: taxa_abandono_em (3.1), taxa_repetencia_em (7.8). O grupo com **maior abandono médio** histórico neste recorte é o grupo 2; o menor abandono médio aparece no grupo 1.",
@@ -59,9 +59,9 @@
   },
   "mlflow": {
     "experiment_name": "evasao_escolar_escola_ano",
-    "tracking_uri": "sqlite:////home/fatima/Henrique_projetos/projeto_evasao_escolar/mlruns/mlflow.db",
-    "parent_run_id": "383604ae63df4d8aa34d06a936caefbd",
-    "final_run_id": "bdbfe67ad00f445bb266f76fbbc5fd15",
+    "tracking_uri": "sqlite:////app/mlruns/mlflow.db",
+    "parent_run_id": "e96f7359722c4106bb4d2f70c29ffe87",
+    "final_run_id": "c21a26430f784f2292cd68ce5d5fbf34",
     "registered_model_name": "evasao_abandono_em_final",
     "ui_command": "bash scripts/mlflow_ui.sh"
   }

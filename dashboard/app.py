@@ -43,6 +43,9 @@ st.markdown("""
 ROOT = Path(__file__).resolve().parent.parent
 PROC = ROOT / "data" / "processed"
 ML_OUT = ROOT / "outputs" / "ml"
+MLFLOW_SUITE_EXPERIMENT = "evasao_escolar_escola_ano"
+MLFLOW_TUNING_EXPERIMENT = "evasao_treino_parametros"
+MLFLOW_CAMPAIGN_NOTEBOOK = "mlruns/experimentos_mlflow_parametros.ipynb"
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -150,6 +153,149 @@ def carregar_artefatos_ml() -> dict | None:
         }
     except (json.JSONDecodeError, OSError, UnicodeDecodeError, pd.errors.ParserError):
         return None
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def carregar_resumo_campanha_mlflow() -> pd.DataFrame | None:
+    """Resumo exportado pelo notebook ``mlruns/experimentos_mlflow_parametros.ipynb``."""
+    path = ML_OUT / "mlflow_campaign_summary.csv"
+    if not path.exists():
+        return None
+    try:
+        return pd.read_csv(path)
+    except (OSError, pd.errors.ParserError):
+        return None
+
+
+def _format_hiperparametros_campanha(row: pd.Series) -> str:
+    """Texto compacto dos hiperparâmetros ajustados em uma rodada da campanha."""
+    algo = str(row.get("algorithm", ""))
+    if algo == "HistGradientBoosting":
+        parts = [
+            f"lr={row['learning_rate']:.2g}" if pd.notna(row.get("learning_rate")) else None,
+            f"depth={int(row['max_depth'])}" if pd.notna(row.get("max_depth")) else None,
+            f"iter={int(row['max_iter'])}" if pd.notna(row.get("max_iter")) else None,
+            f"leaf={int(row['min_samples_leaf'])}" if pd.notna(row.get("min_samples_leaf")) else None,
+            f"l2={row['l2_regularization']:.2g}" if pd.notna(row.get("l2_regularization")) else None,
+            f"nodes={int(row['max_leaf_nodes'])}" if pd.notna(row.get("max_leaf_nodes")) else None,
+        ]
+    elif algo == "DecisionTree":
+        parts = [
+            f"depth={int(row['max_depth'])}" if pd.notna(row.get("max_depth")) else None,
+            f"leaf={int(row['min_samples_leaf'])}" if pd.notna(row.get("min_samples_leaf")) else None,
+        ]
+    elif algo == "KNeighbors":
+        parts = [
+            f"k={int(row['n_neighbors'])}" if pd.notna(row.get("n_neighbors")) else None,
+            f"weights={row['weights']}" if pd.notna(row.get("weights")) else None,
+        ]
+    else:
+        parts = []
+    return ", ".join(p for p in parts if p)
+
+
+def _melhores_runs_por_algoritmo(campanha: pd.DataFrame) -> pd.DataFrame:
+    """Melhor MAE de teste por algoritmo na campanha MLflow."""
+    rows: list[dict] = []
+    for algo, sub in campanha.groupby("algorithm", sort=False):
+        best = sub.loc[sub["test_mae"].idxmin()]
+        rows.append(
+            {
+                "Algoritmo": best.get("modelo_sklearn", algo),
+                "Melhor run": best["run_name"],
+                "MAE (teste)": round(float(best["test_mae"]), 3),
+                "Hiperparâmetros": _format_hiperparametros_campanha(best),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def render_campanha_hiperparametros_section() -> None:
+    """Tabela da campanha de 30 runs (notebook MLflow)."""
+    campanha = carregar_resumo_campanha_mlflow()
+    with st.expander("Experimentos de hiperparâmetros (campanha MLflow — 30 runs)", expanded=False):
+        st.caption(
+            f"Campanha exploratória do notebook `{MLFLOW_CAMPAIGN_NOTEBOOK}`: "
+            "10 rodadas por algoritmo com hiperparâmetros distintos. "
+            "Complementa a suite principal — **não substitui** o modelo final exportado."
+        )
+        if campanha is None or campanha.empty:
+            st.info(
+                "Resumo ainda não exportado. Execute o notebook "
+                f"`{MLFLOW_CAMPAIGN_NOTEBOOK}` (kernel `.venv`)."
+            )
+            return
+
+        melhores = _melhores_runs_por_algoritmo(campanha)
+        st.markdown("**Melhor configuração por algoritmo (menor MAE no teste)**")
+        st.dataframe(melhores, use_container_width=True, hide_index=True)
+
+        detalhe = campanha.copy()
+        detalhe["Hiperparâmetros"] = detalhe.apply(_format_hiperparametros_campanha, axis=1)
+        cols_show = [
+            c
+            for c in (
+                "rodada",
+                "run_name",
+                "modelo_sklearn",
+                "test_mae",
+                "test_rmse",
+                "test_r2",
+                "Hiperparâmetros",
+            )
+            if c in detalhe.columns
+        ]
+        st.markdown("**Todas as rodadas da campanha**")
+        st.dataframe(
+            detalhe[cols_show].sort_values(["modelo_sklearn", "rodada"]),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+
+def render_mlflow_rastreamento_section(meta: dict) -> None:
+    """Dois experimentos MLflow: suite principal + campanha do notebook."""
+    st.markdown("##### Rastreamento MLflow (MLOps)")
+    mlflow_meta = meta.get("mlflow") or {}
+    campanha = carregar_resumo_campanha_mlflow()
+    n_campanha = len(campanha) if campanha is not None else 0
+
+    st.markdown(
+        "Dois fluxos complementares:\n"
+        f"- **`{MLFLOW_SUITE_EXPERIMENT}`** — `run_educational_ml_suite()`: comparação dos "
+        "três regressores, tuning temporal do HGB e registro do modelo final.\n"
+        f"- **`{MLFLOW_TUNING_EXPERIMENT}`** — notebook "
+        f"`{MLFLOW_CAMPAIGN_NOTEBOOK}`: campanha manual de hiperparâmetros "
+        f"({n_campanha or '30'} runs, 10 por algoritmo)."
+    )
+
+    col_suite, col_campanha = st.columns(2)
+    with col_suite:
+        st.markdown("**Suite principal (modelo em produção)**")
+        if mlflow_meta and "error" not in mlflow_meta:
+            st.caption(f"Experimento: `{mlflow_meta.get('experiment_name', MLFLOW_SUITE_EXPERIMENT)}`")
+            st.caption(f"Modelo registrado: `{mlflow_meta.get('registered_model_name', 'evasao_abandono_em_final')}`")
+            if mlflow_meta.get("tracking_uri"):
+                st.caption(f"URI: `{mlflow_meta['tracking_uri']}`")
+        else:
+            st.caption(f"Experimento: `{MLFLOW_SUITE_EXPERIMENT}`")
+            st.caption("Modelo registrado: `evasao_abandono_em_final`")
+            if mlflow_meta.get("error"):
+                st.warning(f"Último registro MLflow: {mlflow_meta['error']}")
+
+    with col_campanha:
+        st.markdown("**Campanha de hiperparâmetros**")
+        st.caption(f"Experimento: `{MLFLOW_TUNING_EXPERIMENT}`")
+        st.caption(f"Notebook: `{MLFLOW_CAMPAIGN_NOTEBOOK}`")
+        if n_campanha:
+            st.caption(f"Resumo local: `{ML_OUT / 'mlflow_campaign_summary.csv'}` ({n_campanha} runs)")
+        else:
+            st.caption("Execute o notebook para popular o experimento e o CSV de resumo.")
+
+    st.info(
+        "Visualize runs, métricas e artefatos com: "
+        "`bash scripts/mlflow_ui.sh` ou `docker compose up mlflow` (porta 5000)."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1383,7 +1529,7 @@ def render_ml_inteligencia_section() -> None:
                     "MAE validacao (dp)": round(cv_summary.get("mae_validacao_dp", float("nan")), 3),
                     "RMSE validacao (media)": round(cv_summary.get("rmse_validacao_media", float("nan")), 3),
                     "R² validacao (media)": round(cv_summary.get("r2_validacao_media", float("nan")), 3),
-                    "Folds": int(cv_summary.get("n_folds", 0)),
+                    "Etapas de validação temporal": int(cv_summary.get("n_folds", 0)),
                 }
             ]
         )
@@ -1408,11 +1554,13 @@ def render_ml_inteligencia_section() -> None:
 
     st.markdown("##### Papel de cada algoritmo")
     st.markdown(
-        "- **HistGradientBoosting** — melhor desempenho preditivo na maioria dos casos; ranking de risco no teste.\n"
+        "- **HistGradientBoosting** — **modelo final do produto** (tuning temporal); ranking de risco e simulação.\n"
         "- **Arvore de decisao** — regras faceis de explicar em reuniao pedagogica.\n"
         "- **KNN** — encontra escolas **parecidas** para benchmarking.\n"
         "- **KMeans** — segmenta perfis de indicadores para localizar grupos mais vulneraveis."
     )
+
+    render_campanha_hiperparametros_section()
 
     col_a, col_b = st.columns(2)
     fig_dir = ROOT / "outputs" / "figures"
@@ -1433,9 +1581,9 @@ def render_ml_inteligencia_section() -> None:
         st.image(str(p_imp), use_container_width=True)
 
     for fn, titulo in (
-        ("ml_final_tuning_top10.png", "**Busca de hiperparametros — melhores candidatos**"),
-        ("ml_final_cv_mae_by_fold.png", "**CV temporal — erro por fold**"),
-        ("ml_final_learning_curve_mae.png", "**Curva de aprendizado do modelo final**"),
+        ("ml_final_tuning_top10.png", "**Busca de hiperparâmetros — combinações com menor erro**"),
+        ("ml_final_cv_mae_by_fold.png", "**Validação no tempo — erro em cada etapa**"),
+        ("ml_final_learning_curve_mae.png", "**Curva de aprendizado — efeito de mais dados no treino**"),
     ):
         fp = fig_dir / fn
         if fp.exists():
@@ -1445,7 +1593,15 @@ def render_ml_inteligencia_section() -> None:
     st.markdown("##### KNN — exemplo de escolas vizinhas (primeira linha do teste)")
     vk = ML_OUT / "knn_vizinhos_exemplo_primeira_linha_teste.csv"
     if vk.exists():
-        st.dataframe(pd.read_csv(vk), use_container_width=True, hide_index=True)
+        knn_ex = pd.read_csv(vk)
+        rename_knn = {
+            "vizinho_rank": "ordem_de_proximidade",
+            "query_row": "linha_consultada",
+            "distancia": "distância",
+            "ano_vizinho": "ano da escola parecida",
+        }
+        knn_ex = knn_ex.rename(columns={k: v for k, v in rename_knn.items() if k in knn_ex.columns})
+        st.dataframe(knn_ex, use_container_width=True, hide_index=True)
     pr = fig_dir / "ml_knn_radar_exemplo.png"
     if pr.exists():
         st.caption("Radar ilustrativo: escola de referencia no treino vs media dos vizinhos mais proximos.")
@@ -1465,12 +1621,61 @@ def render_ml_inteligencia_section() -> None:
     with st.expander("Regras em texto (arvore de decisao)"):
         st.markdown(meta.get("arvore_regras_resumo", "_Sem resumo._"))
 
-    if "pred_hgb" in dfm.columns and "split" in dfm.columns:
-        tt = dfm[dfm["split"] == "teste"].dropna(subset=["pred_hgb"])
-        if not tt.empty:
-            cols = [c for c in ("ano", "id_linha_educacional", "taxa_abandono_em", "pred_hgb", "rank_risco_abandono_previsto") if c in tt.columns]
-            st.markdown("##### Maior abandono previsto no teste (priorizacao)")
-            st.dataframe(tt.sort_values("pred_hgb", ascending=False).head(15)[cols], use_container_width=True, hide_index=True)
+    if "split" in dfm.columns:
+        pred_col = None
+        for candidate in ("pred_modelo_final", "pred_modelo_final_allfit", "pred_hgb"):
+            if candidate in dfm.columns:
+                pred_col = candidate
+                break
+        if pred_col:
+            tt = dfm[dfm["split"] == "teste"].dropna(subset=[pred_col])
+            if not tt.empty:
+                label_pred = {
+                    "pred_modelo_final": "previsão do modelo final (holdout)",
+                    "pred_modelo_final_allfit": "previsão do modelo final (refit completo)",
+                    "pred_hgb": "previsão HGB baseline",
+                }.get(pred_col, pred_col)
+                display_cols = []
+                col_labels = {
+                    "ano": "Ano",
+                    "id_linha_educacional": "Escola (ID)",
+                    "taxa_abandono_em": "Abandono observado (%)",
+                    pred_col: "Abandono previsto (%)",
+                    "rank_risco_abandono_previsto": "Posição no risco (1 = maior)",
+                }
+                for c in (
+                    "ano",
+                    "id_linha_educacional",
+                    "taxa_abandono_em",
+                    pred_col,
+                    "rank_risco_abandono_previsto",
+                ):
+                    if c in tt.columns:
+                        display_cols.append(c)
+                view = tt.sort_values(pred_col, ascending=False).head(15)[display_cols].rename(
+                    columns={k: v for k, v in col_labels.items() if k in display_cols}
+                )
+                st.markdown("##### Maior abandono previsto no teste (priorizacao)")
+                st.caption(
+                    f"Ordenado por **{label_pred}** — mesma lógica usada na simulação de cenários."
+                )
+                st.dataframe(
+                    view,
+                    use_container_width=True,
+                    hide_index=True,
+                )
+                if pred_col != "pred_hgb" and "pred_hgb" in tt.columns:
+                    with st.expander("Comparar com HGB baseline (sem tuning da suite)"):
+                        cmp_cols = [c for c in display_cols if c != pred_col] + ["pred_hgb"]
+                        cmp_cols = list(dict.fromkeys(c for c in cmp_cols if c in tt.columns))
+                        cmp_labels = {**col_labels, "pred_hgb": "Abandono previsto — HGB baseline (%)"}
+                        st.dataframe(
+                            tt.sort_values(pred_col, ascending=False).head(15)[cmp_cols].rename(
+                                columns={k: v for k, v in cmp_labels.items() if k in cmp_cols}
+                            ),
+                            use_container_width=True,
+                            hide_index=True,
+                        )
 
     if meta.get("final_model_inference_function"):
         st.caption(
@@ -1479,20 +1684,7 @@ def render_ml_inteligencia_section() -> None:
             f"e bundle salvo em `{meta.get('final_model_bundle_path', 'outputs/ml/final_model_bundle.pkl')}`."
         )
 
-    mlflow_meta = meta.get("mlflow") or {}
-    if mlflow_meta and "error" not in mlflow_meta:
-        st.markdown("##### Rastreamento MLflow (MLOps)")
-        st.caption(
-            f"Experimento: **{mlflow_meta.get('experiment_name', 'evasao_escolar_escola_ano')}** · "
-            f"URI: `{mlflow_meta.get('tracking_uri', 'mlruns')}` · "
-            f"Modelo registrado: `{mlflow_meta.get('registered_model_name', 'evasao_abandono_em_final')}`"
-        )
-        st.info(
-            "Visualize runs, metricas e artefatos com: "
-            "`bash scripts/mlflow_ui.sh` ou `docker compose up mlflow` (porta 5000)."
-        )
-    elif mlflow_meta.get("error"):
-        st.caption(f"MLflow: {mlflow_meta['error']}")
+    render_mlflow_rastreamento_section(meta)
 
 
 def render_simulacao_cenarios_section(dados: dict) -> None:
@@ -1525,8 +1717,14 @@ def render_simulacao_cenarios_section(dados: dict) -> None:
         from ml.educational_ml import load_final_model_bundle
 
         bundle = load_final_model_bundle(bundle_path)
-    except (OSError, pickle.UnpicklingError, KeyError, ModuleNotFoundError):
-        st.error("Nao foi possivel carregar o bundle do modelo final.")
+    except (OSError, pickle.UnpicklingError, KeyError, ModuleNotFoundError, AttributeError) as exc:
+        st.error(
+            "Nao foi possivel carregar o bundle do modelo final. "
+            "Isso costuma ocorrer quando o `.pkl` foi gerado com outra versao do scikit-learn. "
+            "No Docker, reconstrua a imagem e retreine:\n\n"
+            "`docker compose run --rm train`\n\n"
+            f"Detalhe tecnico: `{type(exc).__name__}: {exc}`"
+        )
         return
 
     feat_cols: list[str] = bundle["feature_columns"]

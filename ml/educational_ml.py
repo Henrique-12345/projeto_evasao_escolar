@@ -447,13 +447,26 @@ def knn_similar_rows(
             rows_out.append(
                 {
                     "query_row": qi,
-                    "vizinho_rank": rank + 1,
+                    "ordem_de_proximidade": rank + 1,
                     "distancia": float(d),
                     "ano_vizinho": m.get("ano"),
                     "id_linha_educacional": m.get("id_linha_educacional"),
                 }
             )
     return pd.DataFrame(rows_out)
+
+
+def _label_melhor_configuracao(rank: int) -> str:
+    """Rótulo acessível para posição na busca de hiperparâmetros."""
+    r = int(rank)
+    if r == 1:
+        return "Melhor configuração"
+    return f"{r}ª melhor configuração"
+
+
+def _label_etapa_validacao_temporal(etapa: int) -> str:
+    """Rótulo acessível para cada etapa da validação cruzada no tempo."""
+    return f"Etapa {int(etapa)}"
 
 
 def plot_hgb_risk_and_importance(
@@ -498,10 +511,17 @@ def plot_hgb_risk_and_importance(
     _fin(fig2, "ml_hgb_permutation_importance.png")
 
     fig3, ax3 = plt.subplots(figsize=(7, 4))
-    ax3.bar(np.arange(len(y_pred)), y_pred[np.argsort(-y_pred)], color="#B45309", alpha=0.85)
-    ax3.set_xlabel("Posição no ranking (1 = maior abandono previsto)")
+    sorted_pred = y_pred[np.argsort(-y_pred)]
+    n_escolas = len(sorted_pred)
+    ax3.bar(np.arange(n_escolas), sorted_pred, color="#B45309", alpha=0.85)
+    ax3.set_xticks(np.arange(n_escolas))
+    ax3.set_xticklabels(
+        [f"{i + 1}ª" for i in range(n_escolas)],
+        fontsize=8,
+    )
+    ax3.set_xlabel("Posição no risco escolar (1ª = maior abandono previsto)")
     ax3.set_ylabel("Abandono EM previsto (%)")
-    ax3.set_title("Ranking de risco no teste (ordenado por abandono previsto)")
+    ax3.set_title("Escolas do teste ordenadas por abandono previsto")
     fig3.tight_layout()
     _fin(fig3, "ml_hgb_risk_ranking.png")
 
@@ -572,7 +592,7 @@ def plot_kmeans_figures(
 
     fig2, ax2 = plt.subplots(figsize=(6, 4))
     ax2.plot(ks, silhouettes, "s-", color="#15803D")
-    ax2.set_xlabel("k")
+    ax2.set_xlabel("Número de grupos")
     ax2.set_ylabel("Silhueta média")
     ax2.set_title("Qualidade da separação dos grupos (silhueta)")
     fig2.tight_layout()
@@ -580,9 +600,9 @@ def plot_kmeans_figures(
 
     fig3, ax3 = plt.subplots(figsize=(7, 5))
     sc = ax3.scatter(X_2d[:, 0], X_2d[:, 1], c=labels, cmap="tab10", alpha=0.85, edgecolors="k", s=45)
-    ax3.set_xlabel("Componente 1 (PCA)")
-    ax3.set_ylabel("Componente 2 (PCA)")
-    ax3.set_title("Escolas–ano no plano PCA, cor = grupo KMeans")
+    ax3.set_xlabel("Resumo 1 dos indicadores")
+    ax3.set_ylabel("Resumo 2 dos indicadores")
+    ax3.set_title("Escolas–ano em visão resumida, cor = grupo KMeans")
     fig3.colorbar(sc, ax=ax3, label="cluster")
     fig3.tight_layout()
     _fin(fig3, "ml_kmeans_scatter_pca.png")
@@ -661,22 +681,27 @@ def plot_final_model_validation_figures(
         fig1, ax1 = plt.subplots(figsize=(9, 5))
         ax1.barh(np.arange(len(top)), top["mae_validacao_media"], color="#1E3A5F")
         ax1.set_yticks(np.arange(len(top)))
-        ax1.set_yticklabels([f"rank {int(r)}" for r in top["rank_test_score"]], fontsize=8)
-        ax1.set_xlabel("MAE médio na validação temporal")
-        ax1.set_title("Busca de hiperparâmetros — 10 melhores candidatos")
+        ax1.set_yticklabels(
+            [_label_melhor_configuracao(r) for r in top["rank_test_score"]],
+            fontsize=8,
+        )
+        ax1.set_xlabel("Erro médio na validação temporal (MAE, p.p.)")
+        ax1.set_title("Busca de hiperparâmetros — 10 combinações com menor erro")
         fig1.tight_layout()
         _fin(fig1, "ml_final_tuning_top10.png")
 
     if not cv_folds.empty:
         fig2, ax2 = plt.subplots(figsize=(8, 4))
         x = np.arange(len(cv_folds))
-        ax2.plot(x, cv_folds["mae_treino"], "o--", label="Treino", color="#94A3B8")
-        ax2.plot(x, cv_folds["mae_validacao"], "s-", label="Validação", color="#DC2626")
+        ax2.plot(x, cv_folds["mae_treino"], "o--", label="Dados de treino", color="#94A3B8")
+        ax2.plot(x, cv_folds["mae_validacao"], "s-", label="Anos posteriores (teste interno)", color="#DC2626")
         ax2.set_xticks(x)
-        ax2.set_xticklabels([f"Fold {int(i)}" for i in cv_folds["fold"]])
-        ax2.set_ylabel("MAE (p.p.)")
-        ax2.set_title("CV temporal — erro por fold do modelo final")
-        ax2.legend()
+        ax2.set_xticklabels(
+            [_label_etapa_validacao_temporal(i) for i in cv_folds["fold"]],
+        )
+        ax2.set_ylabel("Erro médio (MAE, p.p.)")
+        ax2.set_title("Validação no tempo — erro em cada etapa")
+        ax2.legend(["Dados de treino", "Anos posteriores (teste interno)"])
         fig2.tight_layout()
         _fin(fig2, "ml_final_cv_mae_by_fold.png")
 
@@ -686,14 +711,14 @@ def plot_final_model_validation_figures(
             learning_curve_df["train_size"],
             learning_curve_df["mae_treino_media"],
             "o--",
-            label="Treino",
+            label="Dados de treino",
             color="#94A3B8",
         )
         ax3.plot(
             learning_curve_df["train_size"],
             learning_curve_df["mae_validacao_media"],
             "s-",
-            label="Validação",
+            label="Validação em anos posteriores",
             color="#15803D",
         )
         ax3.fill_between(
@@ -703,9 +728,9 @@ def plot_final_model_validation_figures(
             color="#BBF7D0",
             alpha=0.3,
         )
-        ax3.set_xlabel("Tamanho do treino")
-        ax3.set_ylabel("MAE (p.p.)")
-        ax3.set_title("Curva de aprendizado — modelo final")
+        ax3.set_xlabel("Quantidade de escolas–ano no treino")
+        ax3.set_ylabel("Erro médio (MAE, p.p.)")
+        ax3.set_title("Curva de aprendizado — como o erro muda com mais dados")
         ax3.legend()
         fig3.tight_layout()
         _fin(fig3, "ml_final_learning_curve_mae.png")

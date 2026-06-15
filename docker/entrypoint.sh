@@ -15,9 +15,15 @@ run_etl_if_raw_present() {
 }
 
 run_train_if_needed() {
+  train_cmd='python -c "from ml.educational_ml import run_educational_ml_suite; run_educational_ml_suite()"'
   if [[ ! -f "outputs/ml/final_model_bundle.pkl" ]]; then
     echo "[entrypoint] Bundle ML ausente — executando run_educational_ml_suite()..."
-    python -c "from ml.educational_ml import run_educational_ml_suite; run_educational_ml_suite()"
+    eval "$train_cmd"
+    return
+  fi
+  if ! python -c "from ml.educational_ml import load_final_model_bundle; load_final_model_bundle('outputs/ml/final_model_bundle.pkl')" 2>/dev/null; then
+    echo "[entrypoint] Bundle incompatível (ex.: versão do scikit-learn) — retreinando..."
+    eval "$train_cmd"
   fi
 }
 

@@ -19,59 +19,125 @@ Projeto de análise de dados sobre **evasão e abandono escolar no Ensino Fundam
 
 ---
 
-## Execução rápida (Aprendizado de Máquina)
+## Como rodar o projeto
 
-### Opção A — Docker (recomendado para reprodutibilidade)
+> **Guia único de execução** (local ou Docker). Detalhes do ETL estão em [ETL Pipeline](#etl-pipeline); definição das bases em [Bases de Dados](#bases-de-dados).
 
-Pré-requisito: [Docker](https://docs.docker.com/get-docker/) e [Docker Compose](https://docs.docker.com/compose/).
+### Pré-requisitos
 
-1. Coloque os CSVs em `data/raw/` (ver seção [Bases de Dados](#bases-de-dados)).
-2. Na raiz do repositório:
+| Item | Execução local | Execução Docker |
+|------|----------------|-----------------|
+| **Python 3.10+** | Obrigatório (recomendado 3.11) | Não — só Docker |
+| **Docker + Compose** | Opcional | Obrigatório |
+| **2 CSVs** em `data/raw/` | Obrigatório | Obrigatório |
+| **Tempo (1ª vez)** | ~5–15 min (ETL + treino ML) | ~10–25 min (build da imagem + ETL + treino) |
+
+> **Versões fixadas:** `requirements.txt` usa **`scikit-learn==1.7.2`**. O bundle `outputs/ml/final_model_bundle.pkl` só carrega com essa versão. Se alterar o scikit-learn, rode de novo `run_educational_ml_suite()` ou `docker compose run --rm train`.
+
+### 1. Clonar o repositório
 
 ```bash
-# Build da imagem
-docker build -t projeto_evasao_escolar .
+git clone https://github.com/Henrique-12345/projeto_evasao_escolar.git
+cd projeto_evasao_escolar
+```
 
-# Dashboard (ETL + treino ML + Streamlit na porta 8501)
+### 2. Obter os dados brutos
+
+Os CSVs **não vêm no clone do Git** (e `data/processed/` é gerado pelo ETL). Crie a pasta e copie os dois arquivos:
+
+```
+data/raw/dados_socioeconomicos_recife.csv
+data/raw/dados_educacionais_recife.csv
+```
+
+**Onde obter:** (a) extrair/construir a partir dos microdados abertos do **INEP/MEC** para Recife (IBGE 2611606), conforme [Bases de Dados](#bases-de-dados); ou (b) usar os arquivos disponibilizados pela equipe G15 no [site do projeto](https://sites.google.com/cesar.school/g15-evasoescolar/in%C3%ADcio?authuser=0) ou pelo orientador da disciplina.
+
+Sem esses arquivos, o ETL e o dashboard (páginas 1–5) não funcionam.
+
+### 3. Escolher forma de execução
+
+#### Opção A — Docker (recomendado)
+
+**Pré-requisitos:** [Docker](https://docs.docker.com/get-docker/) e [Docker Compose](https://docs.docker.com/compose/).
+
+**Permissão (Linux):** após instalar o Docker, adicione seu usuário ao grupo `docker` e faça login de novo (ou reinicie o terminal/Cursor):
+
+```bash
+sudo usermod -aG docker $USER
+# depois: logout/login ou `newgrp docker` no terminal atual
+groups   # deve listar "docker"
+```
+
+Na raiz do repositório (com os CSVs já em `data/raw/`):
+
+```bash
+# Build (primeira vez ou após mudar requirements.txt / código)
+docker compose build
+
+# Dashboard + MLflow juntos (recomendado)
+docker compose up dashboard mlflow
+```
+
+| Serviço | URL | Porta no host |
+|---------|-----|----------------|
+| **Dashboard** (Streamlit) | http://localhost:8501 | 8501 |
+| **MLflow UI** | http://localhost:5000 | 5000 |
+
+**Portas:** não rode MLflow local (`scripts/mlflow_ui.sh`) e MLflow no Docker **ao mesmo tempo** — ambos usam a porta **5000**. Pare processos locais antes (`Ctrl+C` ou `kill` nos PIDs em `lsof -i :5000`).
+
+Volumes montados: `./data`, `./mlruns`, `./outputs` — artefatos gerados localmente (bundle, figuras, `mlflow.db`) aparecem nos containers.
+
+**Comandos úteis:**
+
+```bash
+# Só dashboard (ETL + treino se faltar bundle + Streamlit)
 docker compose up dashboard
 
-# Ou manualmente:
-docker run --rm -p 8501:8501 \
-  -v "$(pwd)/data:/app/data" \
-  -v "$(pwd)/mlruns:/app/mlruns" \
-  -v "$(pwd)/outputs:/app/outputs" \
-  projeto_evasao_escolar dashboard
-```
-
-3. **MLflow UI** (experimentos, métricas e modelos registrados):
-
-```bash
+# Só MLflow
 docker compose up mlflow
-# Acesse http://localhost:5000
-```
 
-4. **Somente treino + MLflow** (sem dashboard):
-
-```bash
+# Retreinar modelo + registrar no MLflow (sem subir UI)
 docker compose run --rm train
+
+# Segundo plano
+docker compose up -d dashboard mlflow
+
+# Parar
+docker compose down
 ```
 
-### Opção B — Ambiente local (Python)
+O entrypoint do dashboard executa ETL (se houver CSVs em `data/raw/`) e `run_educational_ml_suite()` se o bundle estiver ausente ou incompatível com o scikit-learn da imagem.
+
+#### Opção B — Ambiente local (Python + `.venv`)
 
 ```bash
-pip install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -r requirements.txt    # inclui scikit-learn==1.7.2
+
 python etl/etl_pipeline.py
 python -c "from ml.educational_ml import run_educational_ml_suite; run_educational_ml_suite()"
-mlflow ui --backend-store-uri mlruns   # http://localhost:5000
-bash scripts/mlflow_ui.sh              # recomendado (SQLite, MLflow 3+)
-streamlit run dashboard/app.py         # http://localhost:8501
 ```
 
-O comando `run_educational_ml_suite()` registra automaticamente em **`mlruns/`**:
-- parâmetros da suite e hiperparâmetros do modelo final;
-- métricas de teste (MAE, RMSE, R²) por modelo;
-- **múltiplos runs** (comparação KNN / árvore / HGB + run do modelo final);
-- **modelos sklearn** serializados (incl. registro `evasao_abandono_em_final`).
+**MLflow (SQLite):** backend em `mlruns/mlflow.db` (não use a pasta `mlruns/` como URI no MLflow 3+):
+
+```bash
+bash scripts/mlflow_ui.sh          # http://localhost:5000
+# equivalente:
+mlflow ui --backend-store-uri "sqlite:///$(pwd)/mlruns/mlflow.db"
+```
+
+**Dashboard:**
+
+```bash
+streamlit run dashboard/app.py     # http://localhost:8501
+```
+
+No **Windows**, após ETL + suite ML, você também pode usar `iniciar_dashboard.bat` (atalho para o Streamlit).
+
+**Notebooks:** use o kernel do `.venv` (contém `mlflow`, `sklearn`, etc.). Campanha de hiperparâmetros: `mlruns/experimentos_mlflow_parametros.ipynb`.
+
+O comando `run_educational_ml_suite()` gera `outputs/ml/` (CSV, JSON, bundle `.pkl`, figuras) e registra runs em **`mlruns/mlflow.db`**. A **página 5** do dashboard (ML + simulação *O que aconteceria se?*) depende desses artefatos.
 
 Desabilitar MLflow (opcional): `MLFLOW_DISABLED=1 python -c "..."`.
 
@@ -91,7 +157,7 @@ Identificar padrões, tendências e fatores de risco associados à evasão e ao 
 ```
 projeto_evasao_escolar/
 ├── data/
-│   ├── raw/                     # CSVs originais (não versionados)
+│   ├── raw/                     # CSVs brutos (obter antes de rodar — ver README)
 │   └── processed/               # Dados gerados pelo ETL (não versionados)
 ├── docker/
 │   └── entrypoint.sh            # Entrypoint Docker (dashboard / train / mlflow-ui)
@@ -128,12 +194,14 @@ projeto_evasao_escolar/
 
 ## Bases de Dados
 
+Os arquivos abaixo devem estar em **`data/raw/`** antes de rodar o projeto (ver [Como rodar o projeto](#como-rodar-o-projeto)). Não são commitados no Git; `data/processed/` é gerado pelo ETL.
+
 | Arquivo | Descrição | Período | Linhas |
 |---|---|---|---|
 | `dados_socioeconomicos_recife.csv` | Taxas de promoção, repetência e evasão | 2008–2022 | 65 |
 | `dados_educacionais_recife.csv` | ATU, HAD, TDI, aprovação, reprovação, abandono | 2006–2024 | 247 |
 
-> **Fonte:** INEP / MEC — Município de Recife (código IBGE: 2611606)
+> **Fonte:** INEP / MEC — Município de Recife (código IBGE: 2611606). Se não tiver os CSVs, consulte o [site G15](https://sites.google.com/cesar.school/g15-evasoescolar/in%C3%ADcio?authuser=0) ou a documentação da disciplina.
 
 ### Dicionário de Variáveis
 
@@ -148,52 +216,6 @@ projeto_evasao_escolar/
 | `tdi_ef / em` | Taxa de Distorção Idade-Série — EF e EM |
 | `atu_ef / em` | Média de Alunos por Turma — EF e EM |
 | `had_ef / em` | Horas-Aula Diárias — EF e EM |
-
----
-
-## Como usar
-
-### 1. Clonar o repositório
-
-```bash
-git clone https://github.com/<seu-usuario>/projeto_evasao_escolar.git
-cd projeto_evasao_escolar
-```
-
-### 2. Instalar dependências
-
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Adicionar os dados brutos
-
-Copie os dois arquivos CSV para a pasta `data/raw/`:
-
-```
-data/raw/dados_socioeconomicos_recife.csv
-data/raw/dados_educacionais_recife.csv
-```
-
-### 4. Executar o ETL
-
-```bash
-python etl/etl_pipeline.py
-```
-
-O ETL irá gerar em `data/processed/`:
-- 7 tabelas CSV limpas e transformadas
-- Banco SQLite `evasao_escolar.db`
-
-### 5. Iniciar o Dashboard
-
-```bash
-streamlit run dashboard/app.py
-```
-
-Ou no Windows, clique duas vezes em `iniciar_dashboard.bat`.
-
-O dashboard abre em **http://localhost:8501**.
 
 ---
 
@@ -342,7 +364,7 @@ A função **`run_missing_impact_analysis`** (mesmo módulo) compara métricas d
 
 **Validação:** treino nos anos `≤ 2017`, teste nos anos `≥ 2018` (split temporal). O modelo final usa **RandomizedSearchCV** no treino com **TimeSeriesSplit por ano**, seguido de avaliação no teste holdout, exportação para o dashboard e **registro MLflow** via `python -c "from ml.educational_ml import run_educational_ml_suite; run_educational_ml_suite()"`.
 
-**MLflow:** após a suite, consulte `bash scripts/mlflow_ui.sh` ou `docker compose up mlflow`. Backend: `sqlite:///mlruns/mlflow.db`. Experimentos: `evasao_escolar_escola_ano` (suite principal) e `evasao_treino_parametros` (campanha do notebook com 30 runs); modelo registrado: `evasao_abandono_em_final`.
+**MLflow:** após a suite, consulte `bash scripts/mlflow_ui.sh` (local) ou `docker compose up mlflow` (Docker). Backend: **`sqlite:///mlruns/mlflow.db`**. Experimentos: `evasao_escolar_escola_ano` (suite principal) e `evasao_treino_parametros` (campanha do notebook com 30 runs); modelo registrado: `evasao_abandono_em_final`.
 
 > Se você registrou experimentos antes da migração para SQLite, rode novamente `run_educational_ml_suite()` para popular o banco.
 
@@ -367,7 +389,7 @@ Ou use o VS Code / Cursor para abrir o `.ipynb` com o kernel Python onde `requir
 | Biblioteca | Uso |
 |---|---|
 | `pandas` / `numpy` | Manipulação e transformação de dados |
-| `scikit-learn` | Pipeline de pré-processamento, tuning (`RandomizedSearchCV`), validação temporal e modelos de regressão / clusterização |
+| `scikit-learn` | Pipeline de pré-processamento, tuning (`RandomizedSearchCV`), validação temporal e modelos de regressão / clusterização (**versão fixada: 1.7.2** — ver [Como rodar o projeto](#como-rodar-o-projeto)) |
 | `matplotlib` / `seaborn` | Visualizações estáticas (notebook) |
 | `plotly` | Gráficos interativos (dashboard) |
 | `streamlit` | Interface do dashboard web |

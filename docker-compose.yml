@@ -11,6 +11,7 @@ services:
       - ./mlruns:/app/mlruns
       - ./outputs:/app/outputs
     command: ["dashboard"]
+    restart: unless-stopped
 
   mlflow:
     build: .
@@ -19,6 +20,7 @@ services:
     volumes:
       - ./mlruns:/app/mlruns
     command: ["mlflow-ui"]
+    restart: unless-stopped
 
   train:
     build: .

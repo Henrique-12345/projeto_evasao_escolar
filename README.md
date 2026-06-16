@@ -7,11 +7,16 @@
 
 ### Equipe
 
-| Nome | GitHub |
+| Nome | Email |
 |------|--------|
-| Henrique | [@Henrique-12345](https://github.com/Henrique-12345) |
-
-> *Inclua aqui os demais integrantes do grupo G15, se aplicável.*
+| Henrique Magalhães | hlm2@cesar.school |
+| Lucca Gomes | lvg2@cesar.school |
+| João Victor Nunes | jvln@cesar.school |
+| Pedro Antônio de Freitas | pafm@cesar.school |
+| Felipe Bandeira | fbq@cesar.school |
+| João Marcelo Pordeus | jmpq@cesar.school |
+| Antonio Albuquerque Neto | aaon@cesar.school |
+| Lucas Ferraz Santana | lfsf@cesar.school |
 
 ---
 
